@@ -2,6 +2,15 @@
 
 static char text[100];
 
+uint32_t get_size_pcap_entry_header( PCAP_FILE_GLOBAL_HEADER* p_pcap_file_global_header ){
+	uint32_t temp = p_pcap_file_global_header->magic_number;
+	if ( ( temp & 0x0000FFFF ) == 0xcd34 ){
+		return 24;
+	} else{
+		return 16;
+	}
+}
+
 static PCAP_FILE* init_pcap_file_struct( uint32_t size ){
 	PCAP_FILE* p_pcap_file = (PCAP_FILE*) malloc( sizeof(PCAP_FILE) );
 	p_pcap_file->p_data = (uint8_t*) malloc(size);

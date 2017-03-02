@@ -1,21 +1,7 @@
 #include "capture.h"
+#include "message.h"
 
-static PCAP_PACKET* init_pcap_packet( uint32_t size, const u_char *data ){
-	PCAP_PACKET* p_pcap_packet = (PCAP_PACKET*) malloc( sizeof( PCAP_PACKET ) );
-	p_pcap_packet->p_data = (uint8_t*) malloc( size );
-	p_pcap_packet->size = size;
-
-	for( int i = 0; i < size; i++ ){
-		p_pcap_packet->p_data[i] = data[i];
-	}
-
-	return p_pcap_packet;
-}
-
-void free_pcap_packet( PCAP_PACKET* p_pcap_packet ){
-	free( p_pcap_packet->p_data );
-	free( p_pcap_packet );
-}
+static char text[100];
 
 pcap_t* open_devide( void ){
 	char *device;
@@ -26,7 +12,8 @@ pcap_t* open_devide( void ){
 
     device = pcap_lookupdev( error_buffer );
     if (device == NULL) {
-        printf("[ERROR] capture.c: open_devide() --> Error finding device: %s\n", error_buffer );
+        sprintf( text, "capture.c: open_devide() --> Error finding device: %s\n", error_buffer );
+        print_error( text );
         exit(0);
     }
 
@@ -42,24 +29,24 @@ pcap_t* open_devide( void ){
     return handle;
 }
 
-PCAP_PACKET* get_next_packet( pcap_t* handle ){
+PACKET* get_next_device_packet( pcap_t* handle ){
 	struct pcap_pkthdr packet_header;
 	const u_char *data;
 	data = pcap_next( handle, &packet_header);
     if (data == NULL) {
-        printf("[ERROR] capture.c: get_next_packet() --> No packet found.\n");
+        print_error( "capture.c: get_next_packet() --> No packet found.\n" );
         exit(0);
     }
 
     if (data == NULL) {
-        printf("[ERROR] capture.c: get_next_packet() --> No packet found.\n");
+        print_error( "capture.c: get_next_packet() --> No packet found.\n" );
         exit(0);
     }
 
 	if ( packet_header.caplen != packet_header.len ){
-		printf("[WARNING] capture.c: get_next_packet() --> packet_header.caplen != packet_header.len\n");
+		print_warning( "capture.c: get_next_packet() --> packet_header.caplen != packet_header.len\n" );
         return NULL;
 	}
 
-    return init_pcap_packet( packet_header.len, data );
+    return init_packet_u_char( packet_header.len, data );
 }

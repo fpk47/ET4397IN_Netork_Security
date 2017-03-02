@@ -2,22 +2,19 @@
 #include "pcap_file.h"
 #include "capture.h"
 #include "parser.h"
+#include "packet.h"
 
 int main(int argc, char *argv[]) {
-	PCAP_FILE* pcap_file = open_pcap_file( "dnssample.pcap" );
+	PCAP_FILE* p_pcap_file = open_pcap_file( "dnssample.pcap" );
+	//PCAP_FILE* p_pcap_file = open_pcap_file( "test.pcap" );
+	set_current_pcap_file( p_pcap_file );
 
-	printf( "%x\n", pcap_file->p_data[0] );
+	PACKET* p_packet;
 
-	pcap_t* p_handle = open_devide();
-
-	while (1){
-		PCAP_PACKET* p_pcap_packet = get_next_packet( p_handle );
-
-		if ( p_pcap_packet != NULL ){
-			print_pcap_packet( p_pcap_packet );
-			free_pcap_packet( p_pcap_packet );
-		}
-	}
+	do{
+		p_packet = get_next_pcap_file_packet();
+		print_packet( p_packet );
+	} while (  p_packet != NULL );
 	
     return 0;
 }
