@@ -13,6 +13,7 @@ static uint32_t parse_ip_4_header( uint8_t *p_data, IP_4_HEADER *p_ip_4_header, 
 static uint32_t parse_udp_header( uint8_t *p_data, UDP_HEADER *p_udp_header, uint32_t current_index );
 static uint32_t parse_tcp_header( uint8_t *p_data, TCP_HEADER *p_tcp_header, uint32_t current_index );
 static uint32_t parse_dns_header( uint8_t *p_data, DNS_HEADER *p_dns_header, uint32_t current_index );
+static uint32_t parse_rr_query_entry( uint8_t *p_data, RR_QUERY_ENTRY *p_rr_query_entry, uint32_t current_index );
 
 static uint8_t getBit( uint8_t value, uint8_t index ){
 	return ( ( value >> index )  & 0x01) ;
@@ -37,9 +38,10 @@ void set_current_pcap_file( PCAP_FILE* p_pcap_file ){
 	current_index = PCAP_FILE_GLOBAL_HEADER_SIZE;
 	p_current_pcap_file_global_header = (PCAP_FILE_GLOBAL_HEADER*) p_pcap_file->p_data;
 
-	print_debug( "\nparser.c: set_current_pcap_file() --> STARTING...\n" );
+	print_debug( "parser.c: set_current_pcap_file() --> STARTING...\n" );
 	sprintf( text, "parser.c: set_current_pcap_file() --> get_size_pcap_entry_header() == %d\n", get_size_pcap_entry_header( p_current_pcap_file_global_header ) );
 	print_debug( text );
+	return;
 }
 
 PACKET* get_next_pcap_file_packet( void ){
@@ -50,12 +52,6 @@ PACKET* get_next_pcap_file_packet( void ){
 		return NULL;
 	}
 
-	if ( p_current_pcap_file->size < current_index ){
-		sprintf( text, "parser.c: get_next_pcap_file_packet() --> [%d %d] End of pcap file\n", current_index, p_current_pcap_file->size );
-		print_warning( text );
-		return NULL;
-	}
-
 	PCAP_FILE_ENTRY_HEADER *p_pcap_file_entry_header = (PCAP_FILE_ENTRY_HEADER*) &p_data[current_index];
 	if (  p_pcap_file_entry_header->incl_len != p_pcap_file_entry_header->orig_len ){
 		print_warning( "parser.c: get_next_pcap_file_packet() --> incl_len != orig_len\n" );
@@ -63,7 +59,7 @@ PACKET* get_next_pcap_file_packet( void ){
 	}
 
 	if ( current_index >= p_current_pcap_file->size - 1 ){
-		print_warning( "parser.c: get_next_pcap_file_packet() --> EOF\n" );
+		print_info( "parser.c: get_next_pcap_file_packet() --> EOF\n" );
 		return NULL;
 	}
 
@@ -71,34 +67,48 @@ PACKET* get_next_pcap_file_packet( void ){
 	uint32_t size = p_pcap_file_entry_header->incl_len;
 
 	PACKET *p_packet = init_packet_uint8_t( size, &p_data[current_index] );
-
-	uint32_t temp_index = 0;
-	temp_index = parse_ethernet_header( p_packet->p_data, &(p_packet->ethernet_header), temp_index );
-	temp_index = parse_ip_4_header( p_packet->p_data, &(p_packet->ip_4_header), temp_index );
-
-	if ( is_udp_packet( p_packet ) ){
-		temp_index = parse_udp_header( p_packet->p_data, &(p_packet->udp_header), temp_index );
-	} else if ( is_tcp_packet( p_packet ) ){
-		temp_index = parse_tcp_header( p_packet->p_data, &(p_packet->tcp_header), temp_index );
-	} else{
-		sprintf( text, "parser.c: get_next_pcap_file_packet() --> no UDP or TCP, abort\n" );
-		print_warning( text );
-		current_index += size;
-		return p_packet;
-	}
-	
-	if ( !is_dns_packet(p_packet) ){
-		sprintf( text, "parser.c: get_next_pcap_file_packet() --> port_dst != 53 and port_src != 53, abort\n" );
-		print_warning( text );
-		current_index += size;
-		return p_packet;
-	}
-
-	temp_index = parse_dns_header( p_packet->p_data, &(p_packet->dns_header), temp_index );
-
+	parse_packet( p_packet );
     current_index += size;
 
 	return p_packet;
+}
+
+void parse_packet( PACKET *p_packet){
+	uint32_t rr_entry_index = 0;
+	uint32_t temp_index = 0;
+	uint8_t *p_data = p_packet->p_data;
+
+	temp_index = parse_ethernet_header( p_data, &(p_packet->ethernet_header), temp_index );
+
+	if ( get_ethernet_type( p_packet ) != TYPE_IP4 ){
+		print_warning( "parser.c: get_next_pcap_file_packet() --> no IP4, abort\n" );
+		return;
+	}
+
+	temp_index = parse_ip_4_header( p_data, &(p_packet->ip_4_header), temp_index );
+
+	if ( is_udp_packet( p_packet ) ){
+		temp_index = parse_udp_header( p_data, &(p_packet->udp_header), temp_index );
+	} else if ( is_tcp_packet( p_packet ) ){
+		temp_index = parse_tcp_header( p_data, &(p_packet->tcp_header), temp_index );
+	} else{
+		print_warning( "parser.c: get_next_pcap_file_packet() --> no UDP or TCP, abort\n" );
+		return;
+	}
+	
+	if ( !is_dns_packet( p_packet) ){
+		print_info( "parser.c: get_next_pcap_file_packet() --> port_dst != 53 and port_src != 53\n" );
+		return;
+	}
+
+	temp_index = parse_dns_header( p_data, &(p_packet->dns_header), temp_index );
+
+	if ( get_dns_number_of_queries( p_packet ) != 1 ){
+		print_info( "parser.c: get_next_pcap_file_packet() --> #queries != 1\n" );
+		return;
+	}
+
+	temp_index = parse_rr_query_entry( p_data, &(p_packet->rr_query_entry), temp_index );
 }
 
 static uint32_t parse_ethernet_header( uint8_t *p_data, ETHERNET_HEADER *p_ethernet_header, uint32_t current_index ){
@@ -199,6 +209,29 @@ static uint32_t parse_dns_header( uint8_t *p_data, DNS_HEADER *p_dns_header, uin
 	swap_variable( (uint8_t *) &(p_dns_header->additional_count), 2 );
 
 	return current_index + get_dns_header_size();
+}
+
+
+uint32_t parse_rr_query_entry( uint8_t *p_data, RR_QUERY_ENTRY *p_rr_query_entry, uint32_t current_index ){
+	uint32_t size = 0;
+
+	do{
+		p_rr_query_entry->name[size] = p_data[ current_index + size ];
+		size++;
+	} while ( p_data[ current_index + size ] != 0 );
+	
+	p_rr_query_entry->name[size] = p_data[ current_index + size ];
+	size++;
+
+	memcpy( &(p_rr_query_entry->rr_type), &p_data[ current_index + size + 0 ], 2 );
+	swap_variable( (uint8_t *) &(p_rr_query_entry->rr_type), 2 );
+	size += 2;
+
+	memcpy( &(p_rr_query_entry->rr_class), &p_data[ current_index + size + 2 ], 2 );
+	swap_variable( (uint8_t *) &(p_rr_query_entry->rr_class), 2 );
+	size += 2;
+
+	return size;
 }
 
 /*

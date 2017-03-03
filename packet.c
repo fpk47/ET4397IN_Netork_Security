@@ -7,6 +7,19 @@ uint32_t get_udp_header_size(){ return 8; }
 uint32_t get_tcp_header_size( TCP_HEADER *p_tcp_header ){ return ( p_tcp_header->data_offset ) * 4; }
 uint32_t get_dns_header_size(){ return 12; }
 
+uint16_t get_ethernet_type( PACKET* p_packet ){ return p_packet->ethernet_header.type; }
+uint32_t get_dns_number_of_queries( PACKET* p_packet ){ return p_packet->dns_header.query_count; }
+uint32_t get_dns_number_of_answers( PACKET* p_packet ){ return p_packet->dns_header.answer_count; }
+uint32_t get_dns_number_of_authorities( PACKET* p_packet ){ return p_packet->dns_header.authority_count; }
+uint32_t get_dns_number_of_additionals( PACKET* p_packet ){ return p_packet->dns_header.additional_count; }
+
+ETHERNET_HEADER* get_ethernet_header( PACKET *p_packet ){ return (ETHERNET_HEADER*) &(p_packet->ethernet_header); }
+IP_4_HEADER* get_IP_4_header( PACKET *p_packet ){ return (IP_4_HEADER*) &(p_packet->ip_4_header); }
+UDP_HEADER* get_UDP_header( PACKET *p_packet ){ return (UDP_HEADER*) &(p_packet->udp_header); }
+TCP_HEADER* get_TCP_header( PACKET *p_packet ){ return (TCP_HEADER*) &(p_packet->tcp_header); }
+DNS_HEADER* get_DNS_header( PACKET *p_packet ){ return (DNS_HEADER*) &(p_packet->dns_header); }
+RR_QUERY_ENTRY* get_rr_query_entry( PACKET *p_packet ){ return  (RR_QUERY_ENTRY*) &(p_packet->rr_query_entry); }
+
 uint8_t is_udp_packet( PACKET *p_packet ){
 	if ( p_packet->ip_4_header.protocol == TYPE_UDP ){
 		return TRUE;
@@ -33,6 +46,11 @@ uint8_t is_dns_packet( PACKET *p_packet ){
 	return FALSE;
 }
 
+RR_ENTRY* init_rr_entry( void ){
+	RR_ENTRY* p_rr_entry = (RR_ENTRY*) malloc( sizeof( RR_ENTRY ) );
+	p_rr_entry->p_rr_data = NULL;
+	return p_rr_entry ;
+}
 
 PACKET* init_packet_u_char( uint32_t size, const u_char *data ){
 	PACKET* p_packet = (PACKET*) malloc( sizeof( PACKET ) );
@@ -41,6 +59,10 @@ PACKET* init_packet_u_char( uint32_t size, const u_char *data ){
 
 	for( int i = 0; i < size; i++ ){
 		p_packet->p_data[i] = data[i];
+	}
+
+	for( int i = 0; i < NUMBER_OF_RR_ENTRIES; i++ ){
+		p_packet->p_rr_entries[i] = NULL;
 	}
 
 	return p_packet;
@@ -86,8 +108,8 @@ void print_packet( PACKET* p_packet ){
     printf("   ETHERNET: mac_src     --> %02x:%02x:%02x:%02x:%02x:%02x\n", p_mac_src[0], p_mac_src[1], p_mac_src[2], p_mac_src[3], p_mac_src[4], p_mac_src[5] );
 	printf("   ETHERNET: size        --> %d\n", get_ethernet_header_size() ); 
 
-    if ( p_ethernet_header->type == TYPE_IP4 ) { printf("   ETHERNET: type        --> IP4\n" ); }
-    else									   { printf("   ETHERNET: type        --> %04x [NOT IP4, ABORTING]\n", p_ethernet_header->type ); printf("-----------------\n" ); return; }
+    if ( get_ethernet_type( p_packet ) == TYPE_IP4 ) { printf("   ETHERNET: type        --> IP4\n" ); }
+    else									   				  { printf("   ETHERNET: type        --> %04x [NOT IP4, ABORTING]\n", p_ethernet_header->type ); printf("-----------------\n" ); return; }
 
 	IP_4_HEADER *p_ip_4_header = &(p_packet->ip_4_header);
 	uint8_t *p_ip_4_dst = p_ip_4_header->ip_4_dst;
@@ -136,9 +158,14 @@ void print_packet( PACKET* p_packet ){
     	printf("        DNS: #authority  --> %d\n", p_dns_header->authority_count ); 
     	printf("        DNS: #additional --> %d\n", p_dns_header->additional_count ); 
     } else{
-    	printf("        DNS: [NO DNS PACKET (PORT != 53), ABORTING], \n" ); 
+    	printf("        DNS: [NOT PORT 53, ABORTING], \n" ); 
     	printf("-----------------\n" ); 
     	return;
+    }
+
+    if ( get_dns_number_of_queries( p_packet ) == 1 ){
+    	RR_QUERY_ENTRY *p_rr_query_entry = get_rr_query_entry( p_packet );
+    	printf( "%s %04x %04x\n", p_rr_query_entry->name, p_rr_query_entry->rr_type, p_rr_query_entry->rr_class );
     }
 
     printf("-----------------\n" );
