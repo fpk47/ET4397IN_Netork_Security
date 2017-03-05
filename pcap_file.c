@@ -1,4 +1,6 @@
 #include "pcap_file.h"
+#include "message.h"
+#include "packet.h"
 
 static char text[100];
 
@@ -23,12 +25,72 @@ void free_pcap_file( PCAP_FILE* p_pcap_file ){
 	free( p_pcap_file );
 }
 
-PCAP_FILE* create_pcap_file( char* p_file_name ){
-	char* p_address = text;
-	sprintf( p_address, "./data/%s", p_file_name );
-    FILE* p_file = fopen( p_address, "w+" );
-    return NULL;
+PCAP_FILE_GLOBAL_HEADER* init_p__pcap_file_global_header( uint32_t magic_number, uint16_t version_major, uint16_t version_minor, 
+                                                          int32_t  this_zone, uint32_t sig_figs, uint32_t snap_len, uint32_t network ){
+	PCAP_FILE_GLOBAL_HEADER *p_pcap_file_global_header = (PCAP_FILE_GLOBAL_HEADER*) malloc( sizeof( PCAP_FILE_GLOBAL_HEADER ) );
+
+	p_pcap_file_global_header->magic_number = magic_number;
+	p_pcap_file_global_header->version_major = version_major;
+	p_pcap_file_global_header->version_minor = version_minor;
+	p_pcap_file_global_header->this_zone = this_zone;
+	p_pcap_file_global_header->sig_figs = sig_figs;
+	p_pcap_file_global_header->snap_len = snap_len;
+	p_pcap_file_global_header->network = network;
+
+	return p_pcap_file_global_header;
+}
+
+PCAP_FILE_ENTRY_HEADER* init_pcap_file_entry_header( PACKET *p_packet ){
+	PCAP_FILE_ENTRY_HEADER *p_pcap_file_entry_header = (PCAP_FILE_ENTRY_HEADER*) malloc( sizeof( PCAP_FILE_ENTRY_HEADER ) );
+	struct timeval currentTime;
+	gettimeofday(&currentTime, NULL);
+
+	p_pcap_file_entry_header->ts_sec = (uint32_t) currentTime.tv_sec;
+	p_pcap_file_entry_header->ts_usec = (uint32_t) currentTime.tv_usec;
+	p_pcap_file_entry_header->incl_len = p_packet->size;
+	p_pcap_file_entry_header->orig_len = p_packet->size;
+
+	return p_pcap_file_entry_header;
+}
+
+FILE* create_pcap_file( char* p_file_name, PCAP_FILE_GLOBAL_HEADER* p_pcap_file_global_header ){
+	sprintf( text, "./data/%s", p_file_name );
+    FILE* p_file = fopen( text, "w+" );
+
+    uint32_t written_size = fwrite( p_pcap_file_global_header, sizeof(uint8_t), PCAP_FILE_GLOBAL_HEADER_SIZE, p_file );
+
+    if ( written_size != PCAP_FILE_GLOBAL_HEADER_SIZE ){
+    	print_warning( "pcap_file.c: create_pcap_file() --> written_size != PCAP_FILE_GLOBAL_HEADER_SIZE \n" );
+    	return NULL;
+    }
+
+    return p_file;
 } 
+
+void close_pcap_file( FILE *p_file ){
+	fclose( p_file );
+}
+
+void save_packet_to_pcap_file( FILE *p_file, PACKET *p_packet, PCAP_FILE_GLOBAL_HEADER* p_pcap_file_global_header ){
+	PCAP_FILE_ENTRY_HEADER* p_pcap_file_entry_header = init_pcap_file_entry_header( p_packet );
+	uint32_t written_size = fwrite( p_pcap_file_entry_header, sizeof(uint8_t), get_size_pcap_entry_header( p_pcap_file_global_header ), p_file );
+
+    printf( "size: %d\n", written_size );
+
+    if ( written_size != get_size_pcap_entry_header( p_pcap_file_global_header ) ){
+    	print_warning( "pcap_file.c: save_packet_to_pcap_file() --> written_size != get_size_pcap_entry_header() \n" );
+    	return;
+    }
+
+    written_size = fwrite( p_packet->p_data, sizeof(uint8_t), p_packet->size, p_file );
+
+    if ( written_size != p_packet->size ){
+    	print_warning( "pcap_file.c: save_packet_to_pcap_file() --> written_size != p_packet->size \n" );
+    	return;
+    }
+
+    return;
+}
 
 PCAP_FILE* open_pcap_file( char* p_file_name ){
 	char* p_address = text;

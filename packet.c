@@ -181,7 +181,7 @@ void free_packet( PACKET* p_packet ){
 
 	if ( is_dns_packet( p_packet ) ){
 		for ( int i = 0; i < NUMBER_OF_RR_ENTRIES; i++ ){
-			free_rr_entry( p_packet->p_rr_entries[i] );
+			//free_rr_entry( p_packet->p_rr_entries[i] ); // NEED TO FIX..
 		}
 	}
 

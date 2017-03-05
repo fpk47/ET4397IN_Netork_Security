@@ -13,5 +13,6 @@
 #include <pcap.h>
 #include <netinet/in.h>
 #include <netinet/if_ether.h>
+#include <sys/time.h>
 
 #endif
