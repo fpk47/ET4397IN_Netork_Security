@@ -4,6 +4,7 @@
 #include "parser.h"
 #include "packet.h"
 #include "message.h"
+#include "tools.h"
 
 #define USE_FILE TRUE
 #define USE_DEVICE FALSE

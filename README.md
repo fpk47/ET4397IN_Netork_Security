@@ -21,9 +21,10 @@ Make sure to include the following files:
 #include "parser.h"
 #include "packet.h"
 #include "message.h"
+#include "tools.h"
 ```
 
-**pcap_file.h** contains all the functions regarding saving and loading packets to and from files. **capture.h** is an interface for reading live packets. **message.h** is an header file which specifies 4 function, _print\_info_, _print\_debug_, _print\_warning_ and _print\_error_ which gives the user some knowlegde what is going on. These can be turned on and off in **message.h** by changing the defines given there. **packet.h** contains all the functions needed for printing packets, checking if a packet is a IP, UDP, DNS etc packet as well as containing all the definitions (codes) for the RR_TYPES, UDP, TCP, IP4 etc. Finally **parser.c** takes care of the hard work, i.e., it parses all the raw data into the right **PACKET** structures which are later used for printing and (later for processing, filtering etc.)
+**pcap_file.h** contains all the functions regarding saving and loading packets to and from files. **capture.h** is an interface for reading live packets. **message.h** is an header file which specifies 4 function, _print\_info_, _print\_debug_, _print\_warning_ and _print\_error_ which gives the user some knowlegde what is going on. These can be turned on and off in **message.h** by changing the defines given there. **packet.h** contains all the functions needed for printing packets, checking if a packet is a IP, UDP, DNS etc packet as well as containing all the definitions (codes) for the RR_TYPES, UDP, TCP, IP4 etc. Also, **tools.h** saves all the strings (char[]) of the dns rr entries. i.e., 0x0cXX is converted to the string at the relative position 0xXX. It also takes care of loading uint23_t and uint16_t variables from the data as well as returning mac and ip addresses as strings. Finally **parser.h** takes care of the hard work, i.e., it parses all the raw data into the right **PACKET** structures which are later used for printing and (later for processing, filtering etc.)
 
 ###Open packets from file
 
