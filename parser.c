@@ -1,6 +1,7 @@
 #include "parser.h"
 #include "packet.h"
 #include "message.h"
+#include "tools.h"
 
 static char text[100];
 
@@ -13,7 +14,8 @@ static uint32_t parse_ip_4_header( uint8_t *p_data, IP_4_HEADER *p_ip_4_header, 
 static uint32_t parse_udp_header( uint8_t *p_data, UDP_HEADER *p_udp_header, uint32_t current_index );
 static uint32_t parse_tcp_header( uint8_t *p_data, TCP_HEADER *p_tcp_header, uint32_t current_index );
 static uint32_t parse_dns_header( uint8_t *p_data, DNS_HEADER *p_dns_header, uint32_t current_index );
-static uint32_t parse_rr_query_entry( uint8_t *p_data, RR_QUERY_ENTRY *p_rr_query_entry, uint32_t current_index );
+static uint32_t parse_rr_query_entry( uint8_t *p_data, RR_QUERY_ENTRY *p_rr_query_entry, uint32_t current_index, uint32_t *rr_index  );
+static uint32_t parse_rr_entry( uint8_t *p_data, RR_ENTRY *p_rr_entry, uint32_t current_index, uint32_t *rr_index ,uint32_t type, char *p_text );
 
 static uint8_t getBit( uint8_t value, uint8_t index ){
 	return ( ( value >> index )  & 0x01) ;
@@ -38,7 +40,7 @@ void set_current_pcap_file( PCAP_FILE* p_pcap_file ){
 	current_index = PCAP_FILE_GLOBAL_HEADER_SIZE;
 	p_current_pcap_file_global_header = (PCAP_FILE_GLOBAL_HEADER*) p_pcap_file->p_data;
 
-	print_debug( "parser.c: set_current_pcap_file() --> STARTING...\n" );
+	print_info( "parser.c: set_current_pcap_file() --> STARTING...\n" );
 	sprintf( text, "parser.c: set_current_pcap_file() --> get_size_pcap_entry_header() == %d\n", get_size_pcap_entry_header( p_current_pcap_file_global_header ) );
 	print_debug( text );
 	return;
@@ -48,13 +50,13 @@ PACKET* get_next_pcap_file_packet( void ){
 	uint8_t *p_data = p_current_pcap_file->p_data;
 
 	if ( p_current_pcap_file == NULL ){
-		print_warning( "parser.c: get_next_pcap_file_packet() --> p_current_pcap_file == NULL\n" );
+		print_debug( "parser.c: get_next_pcap_file_packet() --> p_current_pcap_file == NULL\n" );
 		return NULL;
 	}
 
 	PCAP_FILE_ENTRY_HEADER *p_pcap_file_entry_header = (PCAP_FILE_ENTRY_HEADER*) &p_data[current_index];
 	if (  p_pcap_file_entry_header->incl_len != p_pcap_file_entry_header->orig_len ){
-		print_warning( "parser.c: get_next_pcap_file_packet() --> incl_len != orig_len\n" );
+		print_debug( "parser.c: get_next_pcap_file_packet() --> incl_len != orig_len\n" );
 		return NULL;
 	}
 
@@ -74,14 +76,13 @@ PACKET* get_next_pcap_file_packet( void ){
 }
 
 void parse_packet( PACKET *p_packet){
-	uint32_t rr_entry_index = 0;
 	uint32_t temp_index = 0;
 	uint8_t *p_data = p_packet->p_data;
 
 	temp_index = parse_ethernet_header( p_data, &(p_packet->ethernet_header), temp_index );
 
 	if ( get_ethernet_type( p_packet ) != TYPE_IP4 ){
-		print_warning( "parser.c: get_next_pcap_file_packet() --> no IP4, abort\n" );
+		print_debug( "parser.c: get_next_pcap_file_packet() --> no IP4, abort\n" );
 		return;
 	}
 
@@ -92,23 +93,48 @@ void parse_packet( PACKET *p_packet){
 	} else if ( is_tcp_packet( p_packet ) ){
 		temp_index = parse_tcp_header( p_data, &(p_packet->tcp_header), temp_index );
 	} else{
-		print_warning( "parser.c: get_next_pcap_file_packet() --> no UDP or TCP, abort\n" );
+		print_debug( "parser.c: get_next_pcap_file_packet() --> no UDP or TCP, abort\n" );
 		return;
 	}
 	
 	if ( !is_dns_packet( p_packet) ){
-		print_info( "parser.c: get_next_pcap_file_packet() --> port_dst != 53 and port_src != 53\n" );
+		print_debug( "parser.c: get_next_pcap_file_packet() --> port_dst != 53 and port_src != 53\n" );
 		return;
 	}
 
 	temp_index = parse_dns_header( p_data, &(p_packet->dns_header), temp_index );
 
 	if ( get_dns_number_of_queries( p_packet ) != 1 ){
-		print_info( "parser.c: get_next_pcap_file_packet() --> #queries != 1\n" );
+		print_debug( "parser.c: get_next_pcap_file_packet() --> #queries != 1\n" );
 		return;
 	}
 
-	temp_index = parse_rr_query_entry( p_data, &(p_packet->rr_query_entry), temp_index );
+	uint32_t rr_index = 12;
+
+	temp_index = parse_rr_query_entry( p_data, &(p_packet->rr_query_entry), temp_index, &rr_index );
+
+	uint32_t rr_entry_index = 0;
+
+	for ( int i = 0; i < get_dns_number_of_answers( p_packet ); i++ ){
+
+		p_packet->p_rr_entries[rr_entry_index] = init_rr_entry();
+		temp_index = parse_rr_entry( p_data, p_packet->p_rr_entries[rr_entry_index], temp_index, &rr_index, TYPE_ANSWER, p_packet->rr_query_entry.name );
+		rr_entry_index++;
+	}
+
+	for ( int i = 0; i < get_dns_number_of_authorities( p_packet ); i++ ){
+		p_packet->p_rr_entries[rr_entry_index] = init_rr_entry();
+		temp_index = parse_rr_entry( p_data, p_packet->p_rr_entries[rr_entry_index], temp_index, &rr_index, TYPE_AUTHORITY, p_packet->rr_query_entry.name );
+		rr_entry_index++;
+	}
+
+	for ( int i = 0; i < get_dns_number_of_additionals( p_packet ); i++ ){
+		p_packet->p_rr_entries[rr_entry_index] = init_rr_entry();
+		temp_index = parse_rr_entry( p_data, p_packet->p_rr_entries[rr_entry_index], temp_index, &rr_index, TYPE_ADDITIONAL, p_packet->rr_query_entry.name );
+		rr_entry_index++;
+	}
+
+
 }
 
 static uint32_t parse_ethernet_header( uint8_t *p_data, ETHERNET_HEADER *p_ethernet_header, uint32_t current_index ){
@@ -211,47 +237,69 @@ static uint32_t parse_dns_header( uint8_t *p_data, DNS_HEADER *p_dns_header, uin
 	return current_index + get_dns_header_size();
 }
 
-
-uint32_t parse_rr_query_entry( uint8_t *p_data, RR_QUERY_ENTRY *p_rr_query_entry, uint32_t current_index ){
+uint32_t parse_rr_query_entry( uint8_t *p_data, RR_QUERY_ENTRY *p_rr_query_entry, uint32_t current_index, uint32_t *p_rr_index ){
 	uint32_t size = 0;
+
+	for( int i = 0; i < 100; i++ ){
+		p_rr_query_entry->name[i] = 0;
+	}
 
 	do{
 		p_rr_query_entry->name[size] = p_data[ current_index + size ];
 		size++;
 	} while ( p_data[ current_index + size ] != 0 );
-	
+
 	p_rr_query_entry->name[size] = p_data[ current_index + size ];
 	size++;
 
-	memcpy( &(p_rr_query_entry->rr_type), &p_data[ current_index + size + 0 ], 2 );
+	set_domain_name( p_rr_query_entry->name, *p_rr_index , size );
+
+	memcpy( &(p_rr_query_entry->rr_type), &p_data[ current_index + size ], 2 );
 	swap_variable( (uint8_t *) &(p_rr_query_entry->rr_type), 2 );
 	size += 2;
 
-	memcpy( &(p_rr_query_entry->rr_class), &p_data[ current_index + size + 2 ], 2 );
+	memcpy( &(p_rr_query_entry->rr_class), &p_data[ current_index + size ], 2 );
 	swap_variable( (uint8_t *) &(p_rr_query_entry->rr_class), 2 );
 	size += 2;
 
-	return size;
+	*p_rr_index += size;
+	return current_index + size;
 }
 
-/*
-typedef struct dns_header
-{
-	uint16_t identification;
-	uint8_t QR;
-	uint8_t opcode;
-	uint8_t AA;
-	uint8_t TC;
-	uint8_t RD;
-	uint8_t RA;
-	uint8_t Z;
-	uint8_t AD;
-	uint8_t CD;
-	uint8_t rcode;
-	uint16_t question_count;
-	uint16_t answer_count;
-	uint16_t authority_count;
-	uint16_t additional_count;
-} DNS_HEADER;
-*/
+static uint32_t parse_rr_entry( uint8_t *p_data, RR_ENTRY *p_rr_entry, uint32_t current_index, uint32_t *p_rr_index , uint32_t type, char* p_name ){
+	p_rr_entry->type = type;
+	sprintf( p_rr_entry->name, "%s", p_name );
 
+	memcpy( &(p_rr_entry->rr_type), &p_data[ current_index + 2 ], 2 );
+	swap_variable( (uint8_t *) &(p_rr_entry->rr_type), 2 );
+
+	memcpy( &(p_rr_entry->rr_class), &p_data[ current_index + 4 ], 2 );
+	swap_variable( (uint8_t *) &(p_rr_entry->rr_class), 2 );
+
+	memcpy( &(p_rr_entry->TTL), &p_data[ current_index + 6 ], 4 );
+	swap_variable( (uint8_t *) &(p_rr_entry->TTL), 4 );
+
+	memcpy( &(p_rr_entry->length), &p_data[ current_index + 10 ], 2 );
+	swap_variable( (uint8_t *) &(p_rr_entry->length), 2 );
+
+	p_rr_entry->p_rr_data = malloc( p_rr_entry->length );
+
+	for ( int i = 0; i < p_rr_entry->length; i++ ){
+		p_rr_entry->p_rr_data[i] = p_data[ current_index + 12 + i ];
+	}
+
+	uint32_t rr_type = get_rr_entry_rr_type( p_rr_entry );
+
+	if ( rr_type == TYPE_RR_NS || rr_type == TYPE_RR_CNAME || rr_type == TYPE_RR_PTR || rr_type == TYPE_RR_TXT ){
+		memcpy( p_rr_entry->name, &p_data[ current_index + 12 ], p_rr_entry->length );
+		set_domain_name( p_rr_entry->name, *p_rr_index + 12, p_rr_entry->length );
+	}
+
+	if ( rr_type == TYPE_RR_MX ){
+		memcpy( p_rr_entry->name, &p_data[ current_index + 14 ], p_rr_entry->length - 2 );
+		set_domain_name( p_rr_entry->name, *p_rr_index + 14, p_rr_entry->length - 2 );
+	}
+
+	*p_rr_index += get_rr_entry_size( p_rr_entry );
+	return current_index + get_rr_entry_size( p_rr_entry );
+}

@@ -1,5 +1,6 @@
 #include "capture.h"
 #include "message.h"
+#include "parser.h"
 
 static char text[100];
 
@@ -26,13 +27,15 @@ pcap_t* open_devide( void ){
             error_buffer
         );
 
+    print_info( "capture.c: open_devide(): Ready for capture!\n" );
+
     return handle;
 }
 
-PACKET* get_next_device_packet( pcap_t* handle ){
+PACKET* get_next_device_packet( DEVICE* p_device ){
 	struct pcap_pkthdr packet_header;
 	const u_char *data;
-	data = pcap_next( handle, &packet_header);
+	data = pcap_next( p_device, &packet_header);
     if (data == NULL) {
         print_error( "capture.c: get_next_packet() --> No packet found.\n" );
         exit(0);
@@ -44,9 +47,12 @@ PACKET* get_next_device_packet( pcap_t* handle ){
     }
 
 	if ( packet_header.caplen != packet_header.len ){
-		print_warning( "capture.c: get_next_packet() --> packet_header.caplen != packet_header.len\n" );
+		print_debug( "capture.c: get_next_packet() --> packet_header.caplen != packet_header.len\n" );
         return NULL;
 	}
+    
+    PACKET *p_packet = init_packet_u_char( packet_header.len, data );
+    parse_packet( p_packet );
 
-    return init_packet_u_char( packet_header.len, data );
+    return p_packet;
 }

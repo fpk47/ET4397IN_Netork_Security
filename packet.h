@@ -10,10 +10,25 @@
 #define TYPE_UDP 0x11
 #define TYPE_TCP 0x06
 
-#define TYPE_QUERY 0x0a
-#define TYPE_ANSWER 0x0b
-#define TYPE_AUTHORITY 0x0c
-#define TYPE_ADDITIONAL 0x0d
+#define TYPE_QUERY 0x01
+#define TYPE_ANSWER 0x02
+#define TYPE_AUTHORITY 0x03
+#define TYPE_ADDITIONAL 0x04
+
+#define CLASS_RR_IN 1
+#define CLASS_RR_CS 2
+#define CLASS_RR_CH 3
+#define CLASS_RR_HS 4
+
+#define TYPE_RR_A_STAR 255
+#define TYPE_RR_AAAA 28
+#define TYPE_RR_A 1
+#define TYPE_RR_NS 2
+#define TYPE_RR_CNAME 5
+#define TYPE_RR_SOA 6
+#define TYPE_RR_PTR 12
+#define TYPE_RR_MX 15
+#define TYPE_RR_TXT 16
 
 typedef struct ethernet_header
 {
@@ -64,41 +79,6 @@ typedef struct dns_header
 	uint16_t additional_count;
 } DNS_HEADER;
 
-typedef struct a_type_data
-{
-	
-} A_TYPE_DATA;
-
-typedef struct ns_type_data
-{
-	
-} NS_TYPE_DATA;
-
-typedef struct cname_type_data
-{
-	
-} CNAME_TYPE_DATA;
-
-typedef struct soa_type_data
-{
-	
-} SOA_TYPE_DATA;
-
-typedef struct ptr_type_data
-{
-	
-} PTR_TYPE_DATA;
-
-typedef struct mx_type_data
-{
-	
-} MX_TYPE_DATA;
-
-typedef struct txt_type_data
-{
-
-} TXT_TYPE_DATA;
-
 typedef struct rr_entry
 {
 	uint8_t type;
@@ -147,12 +127,22 @@ uint32_t get_ip_4_header_size( IP_4_HEADER *p_ip_4_header );
 uint32_t get_udp_header_size();
 uint32_t get_tcp_header_size( TCP_HEADER *p_tcp_header );
 uint32_t get_dns_header_size();
+uint32_t get_rr_entry_size( RR_ENTRY *p_rr_entry );
 
 uint16_t get_ethernet_type( PACKET* p_packet );
 uint32_t get_dns_number_of_queries( PACKET* p_packet );
 uint32_t get_dns_number_of_answers( PACKET* p_packet );
 uint32_t get_dns_number_of_authorities( PACKET* p_packet );
 uint32_t get_dns_number_of_additionals( PACKET* p_packet );
+
+char* get_rr_entry_type_name( RR_ENTRY *p_rr_entry );
+
+uint32_t get_rr_entry_rr_type( RR_ENTRY *p_rr_entry );
+char* get_rr_entry_rr_class_name( RR_ENTRY *p_rr_entry );
+char* get_rr_entry_rr_type_name( RR_ENTRY *p_rr_entry );
+
+char* get_rr_query_entry_rr_class_name( RR_QUERY_ENTRY *p_rr_query_entry );
+char* get_rr_query_entry_rr_type_name( RR_QUERY_ENTRY *p_rr_query_entry );
 
 void print_packet( PACKET* p_packet );
 
@@ -161,5 +151,6 @@ RR_ENTRY* init_rr_entry( void );
 PACKET* init_packet_u_char( uint32_t size, const u_char *data );
 PACKET* init_packet_uint8_t( uint32_t size, uint8_t *data );
 void free_packet( PACKET* p_packet );
+void free_rr_entry( RR_ENTRY *p_rr_entry );
 
 #endif

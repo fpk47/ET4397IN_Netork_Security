@@ -4,7 +4,7 @@
 #include "general_includes.h"
 
 #define PRINT_INFO TRUE
-#define PRINT_DEBUG TRUE
+#define PRINT_DEBUG FALSE
 #define PRINT_WARNINGS TRUE
 #define PRINT_ERROR TRUE
 
