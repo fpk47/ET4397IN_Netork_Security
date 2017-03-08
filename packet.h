@@ -7,6 +7,8 @@
 #include "general_includes.h"
 
 #define TYPE_IP4 0x0800
+#define TYPE_IP6 0x86DD
+#define TYPE_ARP 0x0806
 #define TYPE_UDP 0x11
 #define TYPE_TCP 0x06
 
@@ -32,18 +34,32 @@
 
 typedef struct ethernet_header
 {
-	uint8_t mac_dst[6];
-	uint8_t mac_src[6];
+	uint8_t MAC_dst[6];
+	uint8_t MAC_src[6];
 	uint16_t type;
 } ETHERNET_HEADER;
 
-typedef struct ip_4_header
+typedef struct IP4_header
 {
-	uint8_t ip_4_dst[4];
-	uint8_t ip_4_src[4];
+	uint8_t IP4_dst[4];
+	uint8_t IP4_src[4];
 	uint8_t protocol;
 	uint8_t IHL;
-} IP_4_HEADER;
+} IP4_HEADER;
+
+typedef struct ARP_header
+{
+	uint16_t hardware_type;
+	uint16_t protocol_type;
+	uint8_t hardware_size;
+	uint8_t protocol_size;
+	uint16_t opcode;
+	uint8_t MAC_src[6];
+	uint8_t IP4_src[4];
+	uint8_t MAC_dst[6];
+	uint8_t IP4_dst[4];
+	uint8_t message_bus_type;
+} ARP_HEADER;
 
 typedef struct udp_header
 {
@@ -102,7 +118,8 @@ typedef struct packet{
 	uint8_t *p_data;
 
 	ETHERNET_HEADER ethernet_header;
-	IP_4_HEADER ip_4_header;
+	ARP_HEADER arp_header;
+	IP4_HEADER IP4_header;
 	UDP_HEADER udp_header;
 	TCP_HEADER tcp_header;
 	DNS_HEADER dns_header;
@@ -111,29 +128,45 @@ typedef struct packet{
 	RR_ENTRY *p_rr_entries[NUMBER_OF_RR_ENTRIES];
 } PACKET;
 
+uint8_t is_ip4_packet( PACKET *p_packet );
+uint8_t is_ip6_packet( PACKET *p_packet );
+uint8_t is_arp_packet( PACKET *p_packet );
 uint8_t is_udp_packet( PACKET *p_packet );
 uint8_t is_tcp_packet( PACKET *p_packet );
 uint8_t is_dns_packet( PACKET *p_packet );
 
 ETHERNET_HEADER *get_ethernet_header( PACKET *p_packet );
-IP_4_HEADER *get_IP_4_header( PACKET *p_packet );
+ARP_HEADER *get_arp_header( PACKET *p_packet );
+IP4_HEADER *get_IP4_header( PACKET *p_packet );
 UDP_HEADER* get_UDP_header( PACKET *p_packet );
 TCP_HEADER* get_TCP_header( PACKET *p_packet );
 DNS_HEADER* get_DNS_header( PACKET *p_packet );
 RR_QUERY_ENTRY* get_rr_query_entry( PACKET *p_packet );
 
-uint32_t get_ethernet_header_size();
-uint32_t get_ip_4_header_size( IP_4_HEADER *p_ip_4_header );
-uint32_t get_udp_header_size();
+uint32_t get_ethernet_header_size( void );
+uint32_t get_arp_header_size( void );
+uint32_t get_IP4_header_size( IP4_HEADER *p_ip4_header );
+uint32_t get_udp_header_size( void );
 uint32_t get_tcp_header_size( TCP_HEADER *p_tcp_header );
-uint32_t get_dns_header_size();
+uint32_t get_dns_header_size( void );
 uint32_t get_rr_entry_size( RR_ENTRY *p_rr_entry );
 
 uint16_t get_ethernet_type( PACKET* p_packet );
+char* get_ethernet_type_name( PACKET* p_packet );
+uint8_t get_ip4_protocol( PACKET* p_packet );
+char* get_ip4_protocol_name( PACKET* p_packet );
+uint8_t get_ip4_IHL( PACKET *p_packet );
+
 uint32_t get_dns_number_of_queries( PACKET* p_packet );
 uint32_t get_dns_number_of_answers( PACKET* p_packet );
 uint32_t get_dns_number_of_authorities( PACKET* p_packet );
 uint32_t get_dns_number_of_additionals( PACKET* p_packet );
+
+uint8_t* get_IP4_src( PACKET *p_packet );
+uint8_t* get_IP4_dst( PACKET *p_packet );
+
+uint8_t* get_ethernet_MAC_src( PACKET *p_packet );
+uint8_t* get_ethernet_MAC_dst( PACKET *p_packet );
 
 char* get_rr_entry_type_name( RR_ENTRY *p_rr_entry );
 
@@ -151,6 +184,7 @@ RR_ENTRY* init_rr_entry( void );
 PACKET* init_packet_u_char( uint32_t size, const u_char *data );
 PACKET* init_packet_uint8_t( uint32_t size, uint8_t *data );
 void free_packet( PACKET* p_packet );
+PACKET* clone_packet( PACKET* p_packet );
 void free_rr_entry( RR_ENTRY *p_rr_entry );
 
 #endif

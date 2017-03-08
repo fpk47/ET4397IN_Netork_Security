@@ -10,7 +10,8 @@ static PCAP_FILE_GLOBAL_HEADER *p_current_pcap_file_global_header;
 static uint32_t current_index = 0;
 
 static uint32_t parse_ethernet_header( uint8_t *p_data, ETHERNET_HEADER *p_ethernet_header, uint32_t current_index );
-static uint32_t parse_ip_4_header( uint8_t *p_data, IP_4_HEADER *p_ip_4_header, uint32_t current_index );
+static uint32_t parse_IP4_header( uint8_t *p_data, IP4_HEADER *p_IP4_header, uint32_t current_index );
+static uint32_t parse_ARP_header( uint8_t *p_data, ARP_HEADER *p_ARP_header, uint32_t current_index );
 static uint32_t parse_udp_header( uint8_t *p_data, UDP_HEADER *p_udp_header, uint32_t current_index );
 static uint32_t parse_tcp_header( uint8_t *p_data, TCP_HEADER *p_tcp_header, uint32_t current_index );
 static uint32_t parse_dns_header( uint8_t *p_data, DNS_HEADER *p_dns_header, uint32_t current_index );
@@ -19,20 +20,6 @@ static uint32_t parse_rr_entry( uint8_t *p_data, RR_ENTRY *p_rr_entry, uint32_t 
 
 static uint8_t getBit( uint8_t value, uint8_t index ){
 	return ( ( value >> index )  & 0x01) ;
-}
-
-static void swap_variable( uint8_t *p_data, uint32_t size ){
-	uint8_t *p_temp = (uint8_t *) malloc( size );
-
-	for ( int i = 0; i < size; i++ ){
-		p_temp[size - i - 1] = p_data[i];
-	}
-
-	for ( int i = 0; i < size; i++ ){
-		p_data[i] = p_temp[i];
-	}
-
-	free( p_temp );
 }
 
 void set_current_pcap_file( PCAP_FILE* p_pcap_file ){
@@ -75,86 +62,116 @@ PACKET* get_next_pcap_file_packet( void ){
 	return p_packet;
 }
 
-void parse_packet( PACKET *p_packet){
+void parse_packet( PACKET *p_packet ){
 	uint32_t temp_index = 0;
 	uint8_t *p_data = p_packet->p_data;
 
 	temp_index = parse_ethernet_header( p_data, &(p_packet->ethernet_header), temp_index );
 
-	if ( get_ethernet_type( p_packet ) != TYPE_IP4 ){
-		print_debug( "parser.c: get_next_pcap_file_packet() --> no IP4, abort\n" );
+	if ( get_ethernet_type( p_packet ) == TYPE_IP4 ){
+		temp_index = parse_IP4_header( p_data, &(p_packet->IP4_header), temp_index );
+
+		if ( is_udp_packet( p_packet ) ){
+			temp_index = parse_udp_header( p_data, &(p_packet->udp_header), temp_index );
+		} else if ( is_tcp_packet( p_packet ) ){
+			temp_index = parse_tcp_header( p_data, &(p_packet->tcp_header), temp_index );
+		} 
+
+		if ( !is_dns_packet( p_packet) ){
+			print_debug( "parser.c: get_next_pcap_file_packet() --> port_dst != 53 and port_src != 53\n" );
+			return;
+		}
+
+		temp_index = parse_dns_header( p_data, &(p_packet->dns_header), temp_index );
+
+		if ( get_dns_number_of_queries( p_packet ) != 1 ){
+			print_debug( "parser.c: get_next_pcap_file_packet() --> #queries != 1\n" );
+			return;
+		}
+
+		uint32_t rr_index = 12;
+
+		temp_index = parse_rr_query_entry( p_data, &(p_packet->rr_query_entry), temp_index, &rr_index );
+
+		uint32_t rr_entry_index = 0;
+
+		for ( int i = 0; i < get_dns_number_of_answers( p_packet ); i++ ){
+
+			p_packet->p_rr_entries[rr_entry_index] = init_rr_entry();
+			temp_index = parse_rr_entry( p_data, p_packet->p_rr_entries[rr_entry_index], temp_index, &rr_index, TYPE_ANSWER, p_packet->rr_query_entry.name );
+			rr_entry_index++;
+		}
+
+		for ( int i = 0; i < get_dns_number_of_authorities( p_packet ); i++ ){
+			p_packet->p_rr_entries[rr_entry_index] = init_rr_entry();
+			temp_index = parse_rr_entry( p_data, p_packet->p_rr_entries[rr_entry_index], temp_index, &rr_index, TYPE_AUTHORITY, p_packet->rr_query_entry.name );
+			rr_entry_index++;
+		}
+
+		for ( int i = 0; i < get_dns_number_of_additionals( p_packet ); i++ ){
+			p_packet->p_rr_entries[rr_entry_index] = init_rr_entry();
+			temp_index = parse_rr_entry( p_data, p_packet->p_rr_entries[rr_entry_index], temp_index, &rr_index, TYPE_ADDITIONAL, p_packet->rr_query_entry.name );
+			rr_entry_index++;
+		}
+	} else if ( get_ethernet_type( p_packet ) == TYPE_ARP ){
+		temp_index = parse_ARP_header( p_data, &(p_packet->arp_header), temp_index );
 		return;
-	}
-
-	temp_index = parse_ip_4_header( p_data, &(p_packet->ip_4_header), temp_index );
-
-	if ( is_udp_packet( p_packet ) ){
-		temp_index = parse_udp_header( p_data, &(p_packet->udp_header), temp_index );
-	} else if ( is_tcp_packet( p_packet ) ){
-		temp_index = parse_tcp_header( p_data, &(p_packet->tcp_header), temp_index );
 	} else{
-		print_debug( "parser.c: get_next_pcap_file_packet() --> no UDP or TCP, abort\n" );
+		print_debug( "parser.c: get_next_pcap_file_packet() --> no IP4 or ARP, abort\n" );
 		return;
 	}
-	
-	if ( !is_dns_packet( p_packet) ){
-		print_debug( "parser.c: get_next_pcap_file_packet() --> port_dst != 53 and port_src != 53\n" );
-		return;
-	}
-
-	temp_index = parse_dns_header( p_data, &(p_packet->dns_header), temp_index );
-
-	if ( get_dns_number_of_queries( p_packet ) != 1 ){
-		print_debug( "parser.c: get_next_pcap_file_packet() --> #queries != 1\n" );
-		return;
-	}
-
-	uint32_t rr_index = 12;
-
-	temp_index = parse_rr_query_entry( p_data, &(p_packet->rr_query_entry), temp_index, &rr_index );
-
-	uint32_t rr_entry_index = 0;
-
-	for ( int i = 0; i < get_dns_number_of_answers( p_packet ); i++ ){
-
-		p_packet->p_rr_entries[rr_entry_index] = init_rr_entry();
-		temp_index = parse_rr_entry( p_data, p_packet->p_rr_entries[rr_entry_index], temp_index, &rr_index, TYPE_ANSWER, p_packet->rr_query_entry.name );
-		rr_entry_index++;
-	}
-
-	for ( int i = 0; i < get_dns_number_of_authorities( p_packet ); i++ ){
-		p_packet->p_rr_entries[rr_entry_index] = init_rr_entry();
-		temp_index = parse_rr_entry( p_data, p_packet->p_rr_entries[rr_entry_index], temp_index, &rr_index, TYPE_AUTHORITY, p_packet->rr_query_entry.name );
-		rr_entry_index++;
-	}
-
-	for ( int i = 0; i < get_dns_number_of_additionals( p_packet ); i++ ){
-		p_packet->p_rr_entries[rr_entry_index] = init_rr_entry();
-		temp_index = parse_rr_entry( p_data, p_packet->p_rr_entries[rr_entry_index], temp_index, &rr_index, TYPE_ADDITIONAL, p_packet->rr_query_entry.name );
-		rr_entry_index++;
-	}
-
-
 }
 
+
 static uint32_t parse_ethernet_header( uint8_t *p_data, ETHERNET_HEADER *p_ethernet_header, uint32_t current_index ){
-	memcpy( p_ethernet_header->mac_dst, &p_data[  current_index + 0 ], 6 );
-	memcpy( p_ethernet_header->mac_src, &p_data[  current_index + 6 ], 6 );
+	memcpy( p_ethernet_header->MAC_dst, &p_data[  current_index + 0 ], 6 );
+	memcpy( p_ethernet_header->MAC_src, &p_data[  current_index + 6 ], 6 );
 	memcpy( &(p_ethernet_header->type), &p_data[  current_index + 12 ], 2 );
 	swap_variable( (uint8_t *) &(p_ethernet_header->type), 2 );
 
 	return current_index + get_ethernet_header_size();
 }
 
-static uint32_t parse_ip_4_header( uint8_t *p_data, IP_4_HEADER *p_ip_4_header, uint32_t current_index ){
-	memcpy( &(p_ip_4_header->IHL), &p_data[ current_index + 0 ], 1 );
-	p_ip_4_header->IHL &= 0x0F;
+static uint32_t parse_ARP_header( uint8_t *p_data, ARP_HEADER *p_ARP_header, uint32_t current_index ){
+	memcpy( &(p_ARP_header->hardware_type), &p_data[  current_index + 0 ], 2 );
+	swap_variable( (uint8_t *) &(p_ARP_header->hardware_type), 2 );
 
-	memcpy( &(p_ip_4_header->protocol), &p_data[ current_index +  9 ], 1 );
-	memcpy( &(p_ip_4_header->ip_4_src), &p_data[ current_index + 12 ], 4 );
-	memcpy( &(p_ip_4_header->ip_4_dst), &p_data[ current_index + 16 ], 4 );
+	memcpy( &(p_ARP_header->protocol_type), &p_data[  current_index + 2 ], 2 );
+	swap_variable( (uint8_t *) &(p_ARP_header->protocol_type), 2 );
 
-	return current_index + get_ip_4_header_size( p_ip_4_header );
+	memcpy( &(p_ARP_header->hardware_size), &p_data[  current_index + 4 ], 1 );
+	memcpy( &(p_ARP_header->protocol_size), &p_data[  current_index + 5 ], 1 );
+
+	if ( p_ARP_header->hardware_size != 6 ){
+		print_info( "packet.c: parse_ARP_header() --> hardware_size != 6\n" );
+		return -1;
+	}
+
+	if ( p_ARP_header->protocol_size != 4 ){
+		print_info( "packet.c: protocol_size() --> protocol_size != 4\n" );
+		return -1;
+	}
+
+	memcpy( &(p_ARP_header->opcode), &p_data[  current_index + 6 ], 2 );
+	swap_variable( (uint8_t *) &(p_ARP_header->opcode), 2 );
+
+	memcpy( p_ARP_header->MAC_src, &p_data[  current_index +  8 ], 6 );
+	memcpy( p_ARP_header->IP4_src, &p_data[  current_index + 14 ], 4 );
+	memcpy( p_ARP_header->MAC_dst, &p_data[  current_index + 18 ], 6 );
+	memcpy( p_ARP_header->IP4_dst, &p_data[  current_index + 24 ], 4 );
+
+	return current_index + get_arp_header_size();
+}
+
+static uint32_t parse_IP4_header( uint8_t *p_data, IP4_HEADER *p_IP4_header, uint32_t current_index ){
+	memcpy( &(p_IP4_header->IHL), &p_data[ current_index + 0 ], 1 );
+	p_IP4_header->IHL &= 0x0F;
+
+	memcpy( &(p_IP4_header->protocol), &p_data[ current_index +  9 ], 1 );
+	memcpy( &(p_IP4_header->IP4_src), &p_data[ current_index + 12 ], 4 );
+	memcpy( &(p_IP4_header->IP4_dst), &p_data[ current_index + 16 ], 4 );
+
+	return current_index + get_IP4_header_size( p_IP4_header );
 }
 
 static uint32_t parse_udp_header( uint8_t *p_data, UDP_HEADER *p_udp_header, uint32_t current_index ){

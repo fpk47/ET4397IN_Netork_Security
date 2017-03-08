@@ -57,6 +57,11 @@ FILE* create_pcap_file( char* p_file_name, PCAP_FILE_GLOBAL_HEADER* p_pcap_file_
 	sprintf( text, "./data/%s", p_file_name );
     FILE* p_file = fopen( text, "w+" );
 
+    if ( p_file == NULL ){
+    	print_warning( "pcap_file.c: create_pcap_file() --> p_file == NULL\n" );
+    	return NULL;
+    }
+
     uint32_t written_size = fwrite( p_pcap_file_global_header, sizeof(uint8_t), PCAP_FILE_GLOBAL_HEADER_SIZE, p_file );
 
     if ( written_size != PCAP_FILE_GLOBAL_HEADER_SIZE ){
@@ -72,10 +77,13 @@ void close_pcap_file( FILE *p_file ){
 }
 
 void save_packet_to_pcap_file( FILE *p_file, PACKET *p_packet, PCAP_FILE_GLOBAL_HEADER* p_pcap_file_global_header ){
+	if ( p_file == NULL ){
+    	print_warning( "pcap_file.c: save_packet_to_pcap_file() --> p_file == NULL\n" );
+    	return;
+    }
+
 	PCAP_FILE_ENTRY_HEADER* p_pcap_file_entry_header = init_pcap_file_entry_header( p_packet );
 	uint32_t written_size = fwrite( p_pcap_file_entry_header, sizeof(uint8_t), get_size_pcap_entry_header( p_pcap_file_global_header ), p_file );
-
-    printf( "size: %d\n", written_size );
 
     if ( written_size != get_size_pcap_entry_header( p_pcap_file_global_header ) ){
     	print_warning( "pcap_file.c: save_packet_to_pcap_file() --> written_size != get_size_pcap_entry_header() \n" );
@@ -96,6 +104,11 @@ PCAP_FILE* open_pcap_file( char* p_file_name ){
 	char* p_address = text;
 	sprintf( p_address, "./data/%s", p_file_name );
     FILE* p_file = fopen( p_address, "r+" );
+
+    if ( p_file == NULL ){
+    	print_warning( "pcap_file.c: open_pcap_file() --> p_file == NULL\n" );
+    	return NULL;
+    }
 
     // Check if file exists...
 	if ( 0 == access( p_address, 0 ) ){ 

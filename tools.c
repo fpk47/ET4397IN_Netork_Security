@@ -28,7 +28,7 @@ static uint32_t domain_replace( uint8_t* p_text, uint32_t *p_length ){
 	return FALSE;
 }
 
-static void swap_variable( uint8_t *p_data, uint32_t size ){
+void swap_variable( uint8_t *p_data, uint32_t size ){
 	uint8_t *p_temp = (uint8_t *) malloc( size );
 
 	for ( int i = 0; i < size; i++ ){
@@ -56,6 +56,16 @@ uint32_t get_uint32_t( uint8_t *p_data ){
 
 	swap_variable( (uint8_t*) &temp, 4 );
 	return temp;
+}
+
+void set_uint16_t( uint8_t *p_data, uint16_t data ){
+	memcpy( p_data, (void*) &data, 2 );
+	swap_variable( p_data, 2 );
+}
+
+void set_uint32_t( uint8_t *p_data, uint32_t data ){
+	memcpy( p_data, (void*) &data, 4 );
+	swap_variable( p_data, 4 );
 }
 
 void set_domain_name( char *p_name, uint32_t index, uint32_t length ){
@@ -106,12 +116,12 @@ char* get_domain_name( char *p_name, uint32_t max_length ){
 	return text;
 }
 
-char* get_mac_address( uint8_t *p_data ){
+char* get_MAC_address( uint8_t *p_data ){
     sprintf( text, "%02x:%02x:%02x:%02x:%02x:%02x", p_data[0], p_data[1], p_data[2], p_data[3], p_data[4], p_data[5] );
     return text;
 }
 
-char* get_ip_4_address( uint8_t *p_data ){
+char* get_IP4_address( uint8_t *p_data ){
     sprintf( text, "%d.%d.%d.%d", p_data[0], p_data[1], p_data[2], p_data[3] );
     return text;
 }
