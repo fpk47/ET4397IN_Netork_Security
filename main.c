@@ -8,41 +8,53 @@
 #include "configuration.h"
 #include "message_bus.h"
 #include "log.h"
+#include "DAI.h"
 
-#define USE_FILE FALSE
-#define USE_DEVICE TRUE
+#define SAVE_TO_FILE TRUE
+#define USE_FILE TRUE
+#define USE_DEVICE FALSE
 
 static char text[100];
 
 /* SEE message.h to turn warnings, debug messages on or off */
 
 static void init( void ){
-	init_message_bus(); // FIRST init_message_bus() THEN init_log()
+	init_packet();
+	init_message_bus(); 
 	init_log();			// FIRST init_message_bus() THEN init_log()
+	init_DAI(); 		// FIRST init_message_bus() THEN init_DAI()
+}
+
+static void update_modules( void ){
+	update_log();
+	update_DAI();
+}
+
+static void add_packet_to_modules( PACKET *p_packet ){
+	if ( p_packet != NULL ){
+		add_packet_to_DAI( p_packet );
+	}	
 }
 
 int main(int argc, char *argv[]) {
 	init();
+	uint32_t counter = 0;
 
-	/* SAVE TO FILE EXAMPLE 
-		PCAP_FILE_GLOBAL_HEADER* p_pcap_file_global_header;  
-		p_pcap_file_global_header = init_p__pcap_file_global_header( 0xa1b2c3d4, 2, 4, 0, 0, 0, 0 );
-		FILE *p_file = create_pcap_file( "new.pcap", p_pcap_file_global_header );
+	PCAP_FILE_GLOBAL_HEADER* p_pcap_file_global_header;  
+	p_pcap_file_global_header = init_p__pcap_file_global_header( 0xa1b2c3d4, 2, 4, 0, 0, 0, 0 );
+	FILE *p_file = create_pcap_file( "save_demo.pcap", p_pcap_file_global_header );
 
-		for ( "all packets" ){
-			save_packet_to_pcap_file( p_file, p_packet, p_pcap_file_global_header );
-		}
-	*/
-
-
-	//CONFIGURATION_FILE* p_configuration_file = open_configuration_file( "test.config" );
-	//CONFIGURATION* p_configuration = create_configuration(p_configuration_file);
-	//exit(0);
+	// "test.config"  is empty to be able to show that DAI can detect ERRORs..
+	CONFIGURATION_FILE* p_configuration_file = open_configuration_file( "test.config" );
+	CONFIGURATION *p_configuration = create_configuration( p_configuration_file );
+	set_global_configuration( p_configuration );
 
 	if ( USE_FILE ){
-		PCAP_FILE* p_pcap_file = open_pcap_file( "dnssample.pcap" );
+		DEVICE* p_device = open_devide(); // To get OWN IP4
+
+		PCAP_FILE* p_pcap_file = open_pcap_file( "arp2.pcap" );
 		set_current_pcap_file( p_pcap_file );
-			
+
 		PACKET *p_packet = NULL;
 
 		do{
@@ -53,51 +65,38 @@ int main(int argc, char *argv[]) {
 			p_packet = get_next_pcap_file_packet();
 
 			if ( p_packet != NULL ){
-				print_packet( p_packet );
+				add_packet_to_modules( p_packet );
 			}
 
+			update_modules();
 		} while ( p_packet != NULL );
 	} 
 
 	if ( USE_DEVICE ){
 		uint32_t counter = 0;
-		CONFIGURATION *p_configuration = malloc_configuration();
-		set_local_configuration( p_configuration );
 
 		DEVICE* p_device = open_devide();
 
 		while ( TRUE ){
-			uint8_t counter = 0;
 			PACKET *p_packet = get_next_device_packet( p_device );
 
-			if ( p_packet != NULL ){
-				uint8_t *p_MAC = get_ethernet_MAC_src( p_packet );
-				uint8_t *p_IP = get_IP4_src( p_packet );
-				uint32_t index =  index_of_ARP_entry_in_configuration( get_local_configuration(), p_MAC, p_IP );
-				
-				if ( index == -1 ){
-					add_ARP_entry_to_configuration( get_local_configuration(), get_ethernet_MAC_src( p_packet ), get_IP4_src( p_packet ) );
-					//remove_ARP_entry_from_configuration( get_local_configuration(), index_of_ARP_entry_in_configuration( get_local_configuration(), p_MAC, p_IP ) );
+			if ( p_packet != NULL ){ 
+				add_packet_to_modules( p_packet );
+
+				counter++;
+
+				if ( counter % 100 == 0 ){
+					printf("%d\n", counter );
 				}
 
-				if ( is_dns_packet( p_packet ) ){
-					print_packet( p_packet );
+				if ( SAVE_TO_FILE ){
+					save_packet_to_pcap_file( p_file, p_packet, p_pcap_file_global_header );
 				}
 
-				if ( is_arp_packet( p_packet ) ){
-					print_packet( p_packet );
-				}
-
-				/*
-				if ( counter >= 80 ){
-					CONFIGURATION_FILE* p_configuration_file = create_configuration_file( get_local_configuration() );
-					save_configuration_file( "test.config", p_configuration_file );
-					exit(0);
-				}
-				*/
-
-				free_packet( p_packet );
+				free_packet( p_packet ); 
 			}
+
+			update_modules();
 		}
 	}
 	

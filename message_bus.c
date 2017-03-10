@@ -1,9 +1,9 @@
 #include "message_bus.h"
 
-static MESSAGE_BUS_SUBSCRIPTIONS* p_message_bus_subscriptions;
+static MESSAGE_BUS_SUBSCRIPTIONS* p_local_message_bus_subscriptions;
 
 static MESSAGE_BUS_SUBSCRIPTIONS* malloc_message_bus_subsriptions( void );
-static LOCAL_MESSAGE_BUS* malloc_message_bus_subsription( uint8_t arp_notice, uint8_t arp_error );
+static LOCAL_MESSAGE_BUS* malloc_message_bus_subsription( uint8_t ARP_notice, uint8_t ARP_error );
 static uint32_t add_message_bus_subsription( MESSAGE_BUS_SUBSCRIPTION* p_local_message_bus );
 static LOCAL_MESSAGE_BUS* malloc_local_message_bus( void );
 
@@ -27,7 +27,7 @@ void free_local_message_bus( LOCAL_MESSAGE_BUS *p_local_message_bus ){
 	}
 
 	for ( int i = 0; i < MESSAGE_BUS_MAX_NUMBER_OF_ARP_PACKETS_NOTICE; i++ ){
-		PACKET *p_packet = p_local_message_bus->p_arp_packets_notice[i];
+		PACKET *p_packet = p_local_message_bus->p_ARP_packets_notice[i];
 
 		if ( p_packet != NULL ){
 			free_packet( p_packet );
@@ -35,7 +35,7 @@ void free_local_message_bus( LOCAL_MESSAGE_BUS *p_local_message_bus ){
 	}
 
 	for ( int i = 0; i < MESSAGE_BUS_MAX_NUMBER_OF_ARP_PACKETS_ERROR; i++ ){
-		PACKET *p_packet = p_local_message_bus->p_arp_packets_error[i];
+		PACKET *p_packet = p_local_message_bus->p_ARP_packets_error[i];
 
 		if ( p_packet != NULL ){
 			free_packet( p_packet );
@@ -47,10 +47,10 @@ void free_local_message_bus( LOCAL_MESSAGE_BUS *p_local_message_bus ){
 }
 
 void init_message_bus( void ){
-	p_message_bus_subscriptions = malloc_message_bus_subsriptions();
+	p_local_message_bus_subscriptions = malloc_message_bus_subsriptions();
 
-	if ( p_message_bus_subscriptions == NULL ){
-		print_warning( "message_bus.c: init_message_bus() --> p_message_bus_subscriptions == NULL\n" );
+	if ( p_local_message_bus_subscriptions == NULL ){
+		print_warning( "message_bus.c: init_message_bus() --> p_local_message_bus_subscriptions == NULL\n" );
 		return;
 	}
 }
@@ -72,18 +72,17 @@ static MESSAGE_BUS_SUBSCRIPTIONS* malloc_message_bus_subsriptions(){
 	return p_message_bus_subscriptions;
 }
 
-static LOCAL_MESSAGE_BUS* malloc_message_bus_subsription( uint8_t arp_notice, uint8_t arp_error ){
+static LOCAL_MESSAGE_BUS* malloc_message_bus_subsription( uint8_t ARP_notice, uint8_t ARP_error ){
 	MESSAGE_BUS_SUBSCRIPTION* p_message_bus_subscription = (MESSAGE_BUS_SUBSCRIPTION*) malloc( sizeof( MESSAGE_BUS_SUBSCRIPTION ) );
 
-	p_message_bus_subscription->arp_notice = arp_notice;
-	p_message_bus_subscription->arp_error = arp_error;
+	p_message_bus_subscription->ARP_notice = ARP_notice;
+	p_message_bus_subscription->ARP_error = ARP_error;
 
 	LOCAL_MESSAGE_BUS *p_local_message_bus = malloc_local_message_bus();
 
 	p_message_bus_subscription->p_local_message_bus = p_local_message_bus;
 
 	uint32_t status = add_message_bus_subsription( p_message_bus_subscription );
-
 
 	if ( !status ){
 		free_message_bus_subsription( p_message_bus_subscription );
@@ -93,18 +92,18 @@ static LOCAL_MESSAGE_BUS* malloc_message_bus_subsription( uint8_t arp_notice, ui
 	return p_local_message_bus;
 }
 
-static uint32_t add_message_bus_subsription( MESSAGE_BUS_SUBSCRIPTION* p_local_message_bus ){
-	if ( p_local_message_bus == NULL ){
-		print_warning( "message_bus.c: add_message_bus_subsription() --> p_local_message_bus == NULL\n" );
+static uint32_t add_message_bus_subsription( MESSAGE_BUS_SUBSCRIPTION* p_local_message_bus_subsription ){
+	if ( p_local_message_bus_subsription == NULL ){
+		print_warning( "message_bus.c: add_message_bus_subsription() --> p_local_message_bus_subsription == NULL\n" );
 		return FALSE;
 	}
 
-	if ( p_message_bus_subscriptions == NULL ){
-		print_warning( "message_bus.c: add_message_bus_subsription() --> p_message_bus_subscriptions == NULL\n" );
+	if ( p_local_message_bus_subscriptions == NULL ){
+		print_warning( "message_bus.c: add_message_bus_subsription() --> p_local_message_bus_subscriptions == NULL\n" );
 		return FALSE;
 	}
 
-	uint32_t number_of_message_bus_subsciptions = p_message_bus_subscriptions->number_of_message_bus_subsciptions;
+	uint32_t number_of_message_bus_subsciptions = p_local_message_bus_subscriptions->number_of_message_bus_subsciptions;
 
 	if ( number_of_message_bus_subsciptions >= MESSAGE_BUS_MAX_NUMBER_OF_MESSAGE_BUS_SUBSRIPTIONS ){
 		print_warning( "message_bus.c: add_message_bus_subsription() --> number_of_message_bus_subsciptions >= MESSAGE_BUS_MAX_NUMBER_OF_MESSAGE_BUS_SUBSRIPTIONS\n" );
@@ -112,11 +111,11 @@ static uint32_t add_message_bus_subsription( MESSAGE_BUS_SUBSCRIPTION* p_local_m
 	}
 
 	for ( int i = 0; i < MESSAGE_BUS_MAX_NUMBER_OF_MESSAGE_BUS_SUBSRIPTIONS; i++ ){
-		MESSAGE_BUS_SUBSCRIPTION *p_message_bus_subscription = p_message_bus_subscriptions->p_message_bus_subscriptions[i];
+		MESSAGE_BUS_SUBSCRIPTION *p_temp_message_bus_subscription = p_local_message_bus_subscriptions->p_message_bus_subscriptions[i];
 
-		if ( p_message_bus_subscription == NULL ){
-			p_message_bus_subscription = p_local_message_bus;
-			p_message_bus_subscriptions->number_of_message_bus_subsciptions += 1;
+		if ( p_local_message_bus_subscriptions->p_message_bus_subscriptions[i] == NULL ){
+			p_local_message_bus_subscriptions->p_message_bus_subscriptions[i] = p_local_message_bus_subsription;
+			p_local_message_bus_subscriptions->number_of_message_bus_subsciptions += 1;
 			return TRUE;
 		}
 	}
@@ -127,39 +126,39 @@ static uint32_t add_message_bus_subsription( MESSAGE_BUS_SUBSCRIPTION* p_local_m
 static LOCAL_MESSAGE_BUS* malloc_local_message_bus(){
 	LOCAL_MESSAGE_BUS* p_local_message_bus = (LOCAL_MESSAGE_BUS*) malloc( sizeof( LOCAL_MESSAGE_BUS ) );
 
-	p_local_message_bus->number_of_arp_packets_notice = 0;
-	p_local_message_bus->number_of_arp_packets_error = 0;
+	p_local_message_bus->number_of_ARP_packets_notice = 0;
+	p_local_message_bus->number_of_ARP_packets_error = 0;
 
 	for ( int i = 0; i < MESSAGE_BUS_MAX_NUMBER_OF_ARP_PACKETS_NOTICE; i++ ){
-		p_local_message_bus->p_arp_packets_notice[i] = NULL;
+		p_local_message_bus->p_ARP_packets_notice[i] = NULL;
 	}
 
 	for ( int i = 0; i < MESSAGE_BUS_MAX_NUMBER_OF_ARP_PACKETS_ERROR; i++ ){
-		p_local_message_bus->p_arp_packets_error[i] = NULL;
+		p_local_message_bus->p_ARP_packets_error[i] = NULL;
 	}
 
 	return p_local_message_bus;
 }
 
-LOCAL_MESSAGE_BUS* create_message_bus_subscription( uint8_t arp_notice, uint8_t arp_error ){
-	return malloc_message_bus_subsription( arp_notice, arp_error );
+LOCAL_MESSAGE_BUS* create_message_bus_subscription( uint8_t ARP_notice, uint8_t ARP_error ){
+	return malloc_message_bus_subsription( ARP_notice, ARP_error );
 }
 
-PACKET* get_arp_notice_from_message_bus( LOCAL_MESSAGE_BUS *p_local_message_bus ){
+PACKET* get_ARP_notice_from_message_bus( LOCAL_MESSAGE_BUS *p_local_message_bus ){
 	if ( p_local_message_bus == NULL ){
-		print_warning( "message_bus.c: get_arp_notice_from_message_bus() --> p_local_message_bus == NULL\n" );
+		print_warning( "message_bus.c: get_ARP_notice_from_message_bus() --> p_local_message_bus == NULL\n" );
 		return NULL;
 	}
 
-	uint32_t number_of_arp_packets_notice = p_local_message_bus->number_of_arp_packets_notice;
+	uint32_t number_of_ARP_packets_notice = p_local_message_bus->number_of_ARP_packets_notice;
 
-	if ( number_of_arp_packets_notice > 0 ){
+	if ( number_of_ARP_packets_notice > 0 ){
 		for ( int i = 0; i < MESSAGE_BUS_MAX_NUMBER_OF_ARP_PACKETS_NOTICE; i++ ){
-			PACKET *p_packet = p_local_message_bus->p_arp_packets_notice[i];
+			PACKET *p_packet = p_local_message_bus->p_ARP_packets_notice[i];
 
 			if ( p_packet != NULL ){
-				p_local_message_bus->number_of_arp_packets_notice -= 1;
-				p_local_message_bus->p_arp_packets_notice[i] = NULL;
+				p_local_message_bus->number_of_ARP_packets_notice -= 1;
+				p_local_message_bus->p_ARP_packets_notice[i] = NULL;
 				return p_packet;
 			}
 		}
@@ -170,21 +169,21 @@ PACKET* get_arp_notice_from_message_bus( LOCAL_MESSAGE_BUS *p_local_message_bus 
 	}
 }
 
-PACKET* get_arp_error_from_message_bus( LOCAL_MESSAGE_BUS *p_local_message_bus ){
+PACKET* get_ARP_error_from_message_bus( LOCAL_MESSAGE_BUS *p_local_message_bus ){
 	if ( p_local_message_bus == NULL ){
-		print_warning( "message_bus.c: get_arp_error_from_message_bus() --> p_local_message_bus == NULL\n" );
+		print_warning( "message_bus.c: get_ARP_error_from_message_bus() --> p_local_message_bus == NULL\n" );
 		return NULL;
 	}
 
-	uint32_t number_of_arp_packets_error = p_local_message_bus->number_of_arp_packets_error;
+	uint32_t number_of_ARP_packets_error = p_local_message_bus->number_of_ARP_packets_error;
 
-	if ( number_of_arp_packets_error > 0 ){
+	if ( number_of_ARP_packets_error > 0 ){
 		for ( int i = 0; i < MESSAGE_BUS_MAX_NUMBER_OF_ARP_PACKETS_ERROR; i++ ){
-			PACKET *p_packet = p_local_message_bus->p_arp_packets_error[i];
+			PACKET *p_packet = p_local_message_bus->p_ARP_packets_error[i];
 
-			if ( p_packet != NULL ){
-				p_local_message_bus->number_of_arp_packets_error -= 1;
-				p_local_message_bus->p_arp_packets_error[i] = NULL;
+			if ( p_local_message_bus->p_ARP_packets_error[i] != NULL ){
+				p_local_message_bus->number_of_ARP_packets_error -= 1;
+				p_local_message_bus->p_ARP_packets_error[i] = NULL;
 				return p_packet;
 			}
 		}
@@ -195,28 +194,26 @@ PACKET* get_arp_error_from_message_bus( LOCAL_MESSAGE_BUS *p_local_message_bus )
 	}
 }
 
-static void add_arp_notice_to_local_message_bus( LOCAL_MESSAGE_BUS *p_local_message_bus, PACKET *p_packet ){
+static void add_ARP_notice_to_local_message_bus( LOCAL_MESSAGE_BUS *p_local_message_bus, PACKET *p_packet ){
 	if ( p_local_message_bus == NULL ){
-		print_warning( "message_bus.c: add_arp_notice_to_local_message_bus() --> p_local_message_bus == NULL\n" );
+		print_warning( "message_bus.c: add_ARP_notice_to_local_message_bus() --> p_local_message_bus == NULL\n" );
 		return;
 	}
 
-	uint32_t number_of_arp_packets_notice = p_local_message_bus->number_of_arp_packets_notice;
+	uint32_t number_of_ARP_packets_notice = p_local_message_bus->number_of_ARP_packets_notice;
 
-	if ( number_of_arp_packets_notice >= MESSAGE_BUS_MAX_NUMBER_OF_ARP_PACKETS_NOTICE ){
-		print_warning( "message_bus.c: add_arp_notice_to_local_message_bus() --> number_of_arp_packets_notice >= MESSAGE_BUS_MAX_NUMBER_OF_ARP_PACKETS_NOTICE\n" );
+	if ( number_of_ARP_packets_notice >= MESSAGE_BUS_MAX_NUMBER_OF_ARP_PACKETS_NOTICE ){
+		print_warning( "message_bus.c: add_ARP_notice_to_local_message_bus() --> number_of_ARP_packets_notice >= MESSAGE_BUS_MAX_NUMBER_OF_ARP_PACKETS_NOTICE\n" );
 		return;
 	}
 
-	PACKET *p_clone_packet = clone_packet( p_packet );
-	parse_packet( p_clone_packet );
+	PACKET *p_temp_packet = clone_packet( p_packet );
+	parse_packet( p_temp_packet );
 
 	for ( int i = 0; i < MESSAGE_BUS_MAX_NUMBER_OF_ARP_PACKETS_NOTICE; i++ ){
-		PACKET *p_temp_packet = p_local_message_bus->p_arp_packets_notice[i];
-
-		if ( p_temp_packet == NULL ){
-			p_temp_packet = p_clone_packet;
-			p_local_message_bus->number_of_arp_packets_notice += 1;
+		if ( p_local_message_bus->p_ARP_packets_notice[i] == NULL ){
+			p_local_message_bus->p_ARP_packets_notice[i] = p_temp_packet;
+			p_local_message_bus->number_of_ARP_packets_notice += 1;
 			return;
 		}
 	}
@@ -224,40 +221,41 @@ static void add_arp_notice_to_local_message_bus( LOCAL_MESSAGE_BUS *p_local_mess
 	return;
 }
 
-void send_arp_notice_to_message_bus( PACKET *p_arp_packets_notice ){
-	if ( p_arp_packets_notice == NULL ){
-		print_warning( "message_bus.c: send_arp_notice_to_message_bus() --> p_arp_packets_notice == NULL\n" );
+void send_ARP_notice_to_message_bus( PACKET *p_ARP_packets_notice ){
+	if ( p_ARP_packets_notice == NULL ){
+		print_warning( "message_bus.c: send_ARP_notice_to_message_bus() --> p_ARP_packets_notice == NULL\n" );
 		return;
 	}
 
-	if ( p_message_bus_subscriptions == NULL ){
-		print_warning( "message_bus.c: send_arp_notice_to_message_bus() --> p_message_bus_subscriptions == NULL\n" );
+	if ( p_local_message_bus_subscriptions == NULL ){
+		print_warning( "message_bus.c: send_ARP_notice_to_message_bus() --> p_local_message_bus_subscriptions == NULL\n" );
 		return;
 	}
 
 	for ( int i = 0; i < MESSAGE_BUS_MAX_NUMBER_OF_MESSAGE_BUS_SUBSRIPTIONS; i++ ){
-		MESSAGE_BUS_SUBSCRIPTION *p_message_bus_subscription = p_message_bus_subscriptions->p_message_bus_subscriptions[i];
-		LOCAL_MESSAGE_BUS *p_local_message_bus = p_message_bus_subscription->p_local_message_bus;
+		MESSAGE_BUS_SUBSCRIPTION *p_message_bus_subscription = p_local_message_bus_subscriptions->p_message_bus_subscriptions[i];
 
 		if ( p_message_bus_subscription != NULL ){
-			if ( p_message_bus_subscription->arp_notice == SUBSCRIBED ){
-				add_arp_notice_to_local_message_bus( p_local_message_bus, p_arp_packets_notice );
+			LOCAL_MESSAGE_BUS *p_local_message_bus = p_message_bus_subscription->p_local_message_bus;
+
+			if ( p_message_bus_subscription->ARP_notice == SUBSCRIBED ){
+				add_ARP_notice_to_local_message_bus( p_local_message_bus, p_ARP_packets_notice );
 			}
 		}
 	}
 }
 
 
-static void add_arp_error_to_local_message_bus( LOCAL_MESSAGE_BUS *p_local_message_bus, PACKET *p_packet ){
+static void add_ARP_error_to_local_message_bus( LOCAL_MESSAGE_BUS *p_local_message_bus, PACKET *p_packet ){
 	if ( p_local_message_bus == NULL ){
-		print_warning( "message_bus.c: add_arp_error_to_local_message_bus() --> p_local_message_bus == NULL\n" );
+		print_warning( "message_bus.c: add_ARP_error_to_local_message_bus() --> p_local_message_bus == NULL\n" );
 		return;
 	}
 
-	uint32_t number_of_arp_packets_error = p_local_message_bus->number_of_arp_packets_error;
+	uint32_t number_of_ARP_packets_error = p_local_message_bus->number_of_ARP_packets_error;
 
-	if ( number_of_arp_packets_error >= MESSAGE_BUS_MAX_NUMBER_OF_ARP_PACKETS_ERROR ){
-		print_warning( "message_bus.c: add_arp_error_to_local_message_bus() --> number_of_arp_packets_error >= MESSAGE_BUS_MAX_NUMBER_OF_ARP_PACKETS_ERROR\n" );
+	if ( number_of_ARP_packets_error >= MESSAGE_BUS_MAX_NUMBER_OF_ARP_PACKETS_ERROR ){
+		print_warning( "message_bus.c: add_ARP_error_to_local_message_bus() --> number_of_ARP_packets_error >= MESSAGE_BUS_MAX_NUMBER_OF_ARP_PACKETS_ERROR\n" );
 		return;
 	}
 
@@ -265,11 +263,9 @@ static void add_arp_error_to_local_message_bus( LOCAL_MESSAGE_BUS *p_local_messa
 	parse_packet( p_clone_packet );
 
 	for ( int i = 0; i < MESSAGE_BUS_MAX_NUMBER_OF_ARP_PACKETS_ERROR; i++ ){
-		PACKET *p_temp_packet = p_local_message_bus->p_arp_packets_notice[i];
-
-		if ( p_temp_packet == NULL ){
-			p_temp_packet = p_clone_packet;
-			p_local_message_bus->number_of_arp_packets_error += 1;
+		if ( p_local_message_bus->p_ARP_packets_error[i] == NULL ){
+			p_local_message_bus->p_ARP_packets_error[i] = p_clone_packet;
+			p_local_message_bus->number_of_ARP_packets_error += 1;
 			return;
 		}
 	}
@@ -277,24 +273,26 @@ static void add_arp_error_to_local_message_bus( LOCAL_MESSAGE_BUS *p_local_messa
 	return;
 }
 
-void send_arp_error_to_message_bus( PACKET *p_arp_packets_error ){
-	if ( p_arp_packets_error == NULL ){
-		print_warning( "message_bus.c: send_arp_error_to_message_bus() --> p_arp_packets_error == NULL\n" );
+void send_ARP_error_to_message_bus( PACKET *p_ARP_packets_error ){
+	if ( p_ARP_packets_error == NULL ){
+		print_warning( "message_bus.c: send_ARP_error_to_message_bus() --> p_ARP_packets_error == NULL\n" );
 		return;
 	}
 
-	if ( p_message_bus_subscriptions == NULL ){
-		print_warning( "message_bus.c: send_arp_error_to_message_bus() --> p_message_bus_subscriptions == NULL\n" );
+	if ( p_local_message_bus_subscriptions == NULL ){
+		print_warning( "message_bus.c: send_ARP_error_to_message_bus() --> p_local_message_bus_subscriptions == NULL\n" );
 		return;
 	}
 
 	for ( int i = 0; i < MESSAGE_BUS_MAX_NUMBER_OF_MESSAGE_BUS_SUBSRIPTIONS; i++ ){
-		MESSAGE_BUS_SUBSCRIPTION *p_message_bus_subscription = p_message_bus_subscriptions->p_message_bus_subscriptions[i];
-		LOCAL_MESSAGE_BUS *p_local_message_bus = p_message_bus_subscription->p_local_message_bus;
+
+		MESSAGE_BUS_SUBSCRIPTION *p_message_bus_subscription = p_local_message_bus_subscriptions->p_message_bus_subscriptions[i];
 
 		if ( p_message_bus_subscription != NULL ){
-			if ( p_message_bus_subscription->arp_error == SUBSCRIBED ){
-				add_arp_error_to_local_message_bus( p_local_message_bus, p_arp_packets_error );
+			LOCAL_MESSAGE_BUS *p_local_message_bus = p_message_bus_subscription->p_local_message_bus;
+
+			if ( p_message_bus_subscription->ARP_error == SUBSCRIBED ){
+				add_ARP_error_to_local_message_bus( p_local_message_bus, p_ARP_packets_error );
 			}
 		}
 	}

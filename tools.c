@@ -116,14 +116,36 @@ char* get_domain_name( char *p_name, uint32_t max_length ){
 	return text;
 }
 
-char* get_MAC_address( uint8_t *p_data ){
-    sprintf( text, "%02x:%02x:%02x:%02x:%02x:%02x", p_data[0], p_data[1], p_data[2], p_data[3], p_data[4], p_data[5] );
-    return text;
+char* get_MAC_address_name( uint8_t *p_data ){
+    static char local_text_1[100];
+	static char local_text_2[100];
+	static uint32_t status = TRUE;
+
+	if ( status ){
+    	sprintf( local_text_1, "%02x:%02x:%02x:%02x:%02x:%02x", p_data[0], p_data[1], p_data[2], p_data[3], p_data[4], p_data[5] );
+    	status = FALSE;
+    	return local_text_1;
+	} else{
+		sprintf( local_text_2, "%02x:%02x:%02x:%02x:%02x:%02x", p_data[0], p_data[1], p_data[2], p_data[3], p_data[4], p_data[5] );
+    	status = TRUE;
+    	return local_text_2;
+	}
 }
 
-char* get_IP4_address( uint8_t *p_data ){
-    sprintf( text, "%d.%d.%d.%d", p_data[0], p_data[1], p_data[2], p_data[3] );
-    return text;
+char* get_IP4_address_name( uint8_t *p_data ){
+	static char local_text_1[100];
+	static char local_text_2[100];
+	static uint32_t status = TRUE;
+
+	if ( status ){
+    	sprintf( local_text_1, "%d.%d.%d.%d", p_data[0], p_data[1], p_data[2], p_data[3] );
+    	status = FALSE;
+    	return local_text_1;
+	} else{
+		sprintf( local_text_2, "%d.%d.%d.%d", p_data[0], p_data[1], p_data[2], p_data[3] );
+    	status = TRUE;
+    	return local_text_2;
+	}
 }
 
 uint8_t checkByte( uint8_t byte ){

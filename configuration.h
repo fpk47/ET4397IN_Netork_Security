@@ -38,8 +38,8 @@ CONFIGURATION* malloc_configuration( void );
 
 CONFIGURATION_FILE* open_configuration_file( char* p_file_name );
 void save_configuration_file( char* p_file_name, CONFIGURATION_FILE* p_configuration_file );
-CONFIGURATION* get_local_configuration( void ); 
-void set_local_configuration( CONFIGURATION* p_configuration ); 
+CONFIGURATION* get_global_configuration( void ); 
+void set_global_configuration( CONFIGURATION* p_configuration ); 
 
 void add_ARP_entry_to_configuration( CONFIGURATION* p_configuration, uint8_t *p_MAC, uint8_t *p_IP4 );
 uint32_t index_of_ARP_entry_in_configuration( CONFIGURATION* p_configuration, uint8_t *p_MAC, uint8_t *p_IP4 );

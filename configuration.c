@@ -1,21 +1,21 @@
 #include "configuration.h"
 
 static char text[200];
-static CONFIGURATION* p_local_configuration = NULL;
+static CONFIGURATION* p_global_configuration = NULL;
 
 static uint32_t compare_ARP_entry( ARP_ENTRY* p_ARP_entry, uint8_t *p_MAC, uint8_t *p_IP4 ){
 	if ( p_ARP_entry == NULL ){
-		print_warning( "configuration: malloc_ARP_entry() --> p_ARP_entry == NULL\n" );
+		print_warning( "configuration.c: malloc_ARP_entry() --> p_ARP_entry == NULL\n" );
 		return FALSE;
 	}
 
 	if ( p_MAC == NULL ){
-		print_warning( "configuration: malloc_ARP_entry() --> p_MAC == NULL\n" );
+		print_warning( "configuration.c: malloc_ARP_entry() --> p_MAC == NULL\n" );
 		return FALSE;
 	}
 
 	if ( p_IP4 == NULL ){
-		print_warning( "configuration: malloc_ARP_entry() --> p_IP4 == NULL\n" );
+		print_warning( "configuration.c: malloc_ARP_entry() --> p_IP4 == NULL\n" );
 		return FALSE;
 	}
 
@@ -36,12 +36,12 @@ static uint32_t compare_ARP_entry( ARP_ENTRY* p_ARP_entry, uint8_t *p_MAC, uint8
 
 static ARP_ENTRY* malloc_ARP_entry( uint8_t *p_MAC, uint8_t *p_IP4 ){
 	if ( p_MAC == NULL ){
-		print_warning( "configuration: malloc_ARP_entry() --> p_MAC == NULL\n" );
+		print_warning( "configuration.c: malloc_ARP_entry() --> p_MAC == NULL\n" );
 		return NULL;
 	}
 
 	if ( p_IP4 == NULL ){
-		print_warning( "configuration: malloc_ARP_entry() --> p_IP4 == NULL\n" );
+		print_warning( "configuration.c: malloc_ARP_entry() --> p_IP4 == NULL\n" );
 		return NULL;
 	}
 
@@ -67,7 +67,7 @@ static CONFIGURATION_FILE* malloc_configuration_file( uint32_t size ){
 
 void free_configuration_file( CONFIGURATION_FILE* p_configuration_file ){
 	if ( p_configuration_file == NULL ){
-		print_warning( "configuration: free_configuration_file() --> p_configuration_file == NULL\n" );
+		print_warning( "configuration.c: free_configuration_file() --> p_configuration_file == NULL\n" );
 		return;
 	}
 
@@ -78,7 +78,7 @@ void free_configuration_file( CONFIGURATION_FILE* p_configuration_file ){
 
 void free_configuration( CONFIGURATION *p_configuration ){
 	if ( p_configuration == NULL ){
-		print_warning( "configuration: free_configuration() --> p_configuration == NULL\n" );
+		print_warning( "configuration.c: free_configuration() --> p_configuration == NULL\n" );
 		return;
 	}
 
@@ -94,7 +94,7 @@ void free_configuration( CONFIGURATION *p_configuration ){
 
 void free_ARP_entry( ARP_ENTRY *p_ARP_entry ){
 	if ( p_ARP_entry == NULL ){
-		print_warning( "configuration: free_ARP_entry() --> p_ARP_entry == NULL\n" );
+		print_warning( "configuration.c: free_ARP_entry() --> p_ARP_entry == NULL\n" );
 		return;
 	}
 
@@ -103,7 +103,7 @@ void free_ARP_entry( ARP_ENTRY *p_ARP_entry ){
 
 CONFIGURATION_FILE* create_configuration_file( CONFIGURATION* p_configuration ){
 	if ( p_configuration == NULL ){
-		print_warning( "configuration: create_configuration_file() --> p_configuration == NULL\n" );
+		print_warning( "configuration.c: create_configuration_file() --> p_configuration == NULL\n" );
 		return NULL;
 	}
 	
@@ -155,20 +155,26 @@ CONFIGURATION* create_configuration( CONFIGURATION_FILE* p_configuration_file ){
     p_data = &(p_data[ index ]);
     index = 0;
 
+    CONFIGURATION* p_configuration = malloc_configuration();
+
     while ( index < size ){
     	uint16_t type = get_uint16_t( &(p_data[ index ]) ); index += 2; 
     	uint16_t size = get_uint16_t( &(p_data[ index ]) ); index += 2; 
 
     	if ( type == CONFIGURATION_ARP_ENTRY_TYPE ){
-    		sprintf( text, "MAC = %s,", get_MAC_address( &(p_data[ index ]) ) ); 
-    		sprintf( text, "%s IP4 = %s\n", text, get_IP4_address( &(p_data[ index + 6 ]) ) ); 
+    		uint8_t *p_MAC = &(p_data[ index + 0 ]);
+    		uint8_t *p_IP4 = &(p_data[ index + 6 ]);
+
+    		add_ARP_entry_to_configuration( p_configuration, p_MAC, p_IP4 );
+
+    		sprintf( text, "configuration.c: create_configuration() --> { %s, %s }\n", get_MAC_address_name( p_MAC ), get_IP4_address_name( p_IP4 ) ); 
     		print_info( text ); 
     	}
 
     	index += size; 
     }
 
-    return NULL;
+    return p_configuration;
 }
 
 CONFIGURATION* malloc_configuration( void ){
@@ -264,36 +270,42 @@ void save_configuration_file( char *p_file_name, CONFIGURATION_FILE* p_configura
 	return;
 }
 
-CONFIGURATION* get_local_configuration( void ){
-	if ( p_local_configuration == NULL ){
-		print_warning( "configuration: get_local_configuration() --> p_local_configuration == NULL\n" );
+CONFIGURATION* get_global_configuration( void ){
+	if ( p_global_configuration == NULL ){
+		print_warning( "configuration.c: get_global_configuration() --> p_global_configuration == NULL\n" );
 		return NULL;
 	}
 
-	return p_local_configuration;
+	return p_global_configuration;
 }
 
-void set_local_configuration( CONFIGURATION* p_configuration ){
+void set_global_configuration( CONFIGURATION* p_configuration ){
 	if ( p_configuration == NULL ){
-		print_warning( "configuration: set_local_configuration() --> p_configuration == NULL\n" );
+		print_warning( "configuration.c: set_global_configuration() --> p_configuration == NULL\n" );
 		return;
 	}
 
-	if ( p_local_configuration != NULL ){
-		free_configuration( p_local_configuration );
+	if ( p_global_configuration != NULL ){
+		free_configuration( p_global_configuration );
 	}
 
-	p_local_configuration = p_configuration;
+	p_global_configuration = p_configuration;
 }
 
 void add_ARP_entry_to_configuration( CONFIGURATION* p_configuration, uint8_t *p_MAC, uint8_t *p_IP4 ){
 	if ( p_configuration == NULL ){
-		print_warning( "configuration: set_local_configuration() --> p_configuration == NULL\n" );
+		print_warning( "configuration.c: add_ARP_entry_to_configuration() --> p_configuration == NULL\n" );
 		return;
 	}
 
 	if ( get_number_of_ARP_entries_in_configuration( p_configuration ) >= CONFIGURATION_MAX_ARP_ENTRIES ){
-		print_warning( "configuration: set_local_configuration() --> get_number_of_ARP_entries_in_configuration( p_configuration ) >= CONFIGURATION_MAX_ARP_ENTRIES\n" );
+		print_warning( "configuration.c: add_ARP_entry_to_configuration() --> get_number_of_ARP_entries_in_configuration( p_configuration ) >= CONFIGURATION_MAX_ARP_ENTRIES\n" );
+		return;
+	}
+
+	if ( index_of_ARP_entry_in_configuration( p_configuration, p_MAC, p_IP4 ) != -1 ){
+		sprintf( text, "configuration.c: add_ARP_entry_to_configuration() --> entry { %s, %s } already exists\n", get_MAC_address_name( p_MAC ), get_IP4_address_name( p_IP4 ) );
+		print_debug( text );
 		return;
 	}
 
@@ -303,6 +315,9 @@ void add_ARP_entry_to_configuration( CONFIGURATION* p_configuration, uint8_t *p_
 		if ( p_configuration->p_ARP_entries[i] == NULL ){
 			p_configuration->p_ARP_entries[i] = p_ARP_entry;
 			p_configuration->number_of_ARP_entries += 1;
+
+			sprintf( text, "configuration.c: add_ARP_entry_to_configuration() --> entry { %s, %s } set\n", get_MAC_address_name( p_MAC ), get_IP4_address_name( p_IP4 ) );
+			print_info( text );
 			return;
 		}
 	}
@@ -312,17 +327,17 @@ void add_ARP_entry_to_configuration( CONFIGURATION* p_configuration, uint8_t *p_
 
 uint32_t index_of_ARP_entry_in_configuration( CONFIGURATION* p_configuration, uint8_t *p_MAC, uint8_t *p_IP4 ){
 	if ( p_configuration == NULL ){
-		print_warning( "configuration: index_of_ARP_entry_in_configuration() --> p_configuration == NULL\n" );
+		print_warning( "configuration.c: index_of_ARP_entry_in_configuration() --> p_configuration == NULL\n" );
 		return -1;
 	}
 
 	if ( p_MAC == NULL ){
-		print_warning( "configuration: index_of_ARP_entry_in_configuration() --> p_MAC == NULL\n" );
+		print_warning( "configuration.c: index_of_ARP_entry_in_configuration() --> p_MAC == NULL\n" );
 		return -1;
 	}
 
 	if ( p_IP4 == NULL ){
-		print_warning( "configuration: index_of_ARP_entry_in_configuration() --> p_MAC == NULL\n" );
+		print_warning( "configuration.c: index_of_ARP_entry_in_configuration() --> p_MAC == NULL\n" );
 		return -1;
 	}
 
@@ -341,19 +356,19 @@ uint32_t index_of_ARP_entry_in_configuration( CONFIGURATION* p_configuration, ui
 
 void remove_ARP_entry_from_configuration( CONFIGURATION* p_configuration, uint32_t index ){
 	if ( p_configuration == NULL ){
-		print_warning( "configuration: remove_ARP_entry_from_configuration() --> p_configuration == NULL\n" );
+		print_warning( "configuration.c: remove_ARP_entry_from_configuration() --> p_configuration == NULL\n" );
 		return;
 	}
 
 	if ( index == -1 ){
-		print_warning( "configuration: remove_ARP_entry_from_configuration() --> index == -1\n" );
+		print_warning( "configuration.c: remove_ARP_entry_from_configuration() --> index == -1\n" );
 		return;
 	}
 
 	ARP_ENTRY *p_ARP_entry = p_configuration->p_ARP_entries[index];
 
 	if ( p_ARP_entry == NULL ){
-		print_warning( "configuration: remove_ARP_entry_from_configuration() --> p_ARP_entry == NULL\n" );
+		print_warning( "configuration.c: remove_ARP_entry_from_configuration() --> p_ARP_entry == NULL\n" );
 		return;
 	}
 
@@ -365,7 +380,7 @@ void remove_ARP_entry_from_configuration( CONFIGURATION* p_configuration, uint32
 
 uint32_t get_number_of_ARP_entries_in_configuration( CONFIGURATION* p_configuration ){
 	if ( p_configuration == NULL ){
-		print_warning( "configuration: get_number_of_ARP_entries_in_configuration() --> p_configuration == NULL\n" );
+		print_warning( "configuration.c: get_number_of_ARP_entries_in_configuration() --> p_configuration == NULL\n" );
 		return - 1;
 	}
 
