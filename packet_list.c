@@ -1,7 +1,23 @@
 #include "packet_list.h"
 
-PACKET_LIST* malloc_packet_list( void ){
+uint32_t get_packet_list_type( PACKET_LIST* p_packet_list ){
+
+	if ( p_packet_list == NULL ){
+		print_warning( "packet_list.c: get_packet_list_type() --> p_packet_list == NULL\n" );
+		return -1;
+	}
+
+	return p_packet_list->type;
+}
+
+PACKET_LIST* malloc_packet_list( uint32_t type ){
+	if ( type != TYPE_ETHERNET && type != TYPE_RADIO_TAP ){
+		print_warning( "packet_list.c: malloc_packet_list() --> type != TYPE_ETHERNET && type != TYPE_RADIO_TAP\n" );
+		return NULL;
+	}
+
 	PACKET_LIST* p_packet_list = (PACKET_LIST*) malloc( sizeof( PACKET_LIST ) );
+	p_packet_list->type = type;
 
 	for ( int i = 0; i < PACKET_LIST_MAX_NUMBER_OF_PACKETS; i++ ){
 		p_packet_list->p_packets[i] = NULL;
@@ -24,6 +40,11 @@ uint32_t index_of_packet_in_packet_list( PACKET_LIST *p_packet_list, PACKET *p_p
 
 	if ( p_packet == NULL ){
 		print_warning( "packet_list.c: malloc_packet_list() --> p_packet == NULL\n" );
+		return -1;
+	}
+
+	if ( p_packet_list->type != get_type( p_packet ) ){
+		print_warning( "packet_list.c: malloc_packet_list() --> p_packet_list->type != get_type( p_packet )\n" );
 		return -1;
 	}
 
@@ -52,10 +73,15 @@ void add_packet_to_packet_list( PACKET_LIST *p_packet_list, PACKET *p_packet ){
 		return;
 	}
 
+	if ( p_packet_list->type != get_type( p_packet ) ){
+		print_warning( "packet_list.c: add_packet_to_packet_list() --> p_packet_list->type != get_type( p_packet )\n" );
+		return;
+	}
+
 	for ( int i = 0; i < PACKET_LIST_MAX_NUMBER_OF_PACKETS; i++ ){
 		if ( p_packet_list->p_packets[i] == NULL ){
 			PACKET *p_temp_packet = clone_packet( p_packet );
-			parse_packet( p_temp_packet );
+			parse_packet( p_temp_packet, get_packet_list_type( p_packet_list ) );
 
 			p_packet_list->p_packets[i] = p_temp_packet;
 			return;

@@ -9,6 +9,7 @@
 
 typedef struct pcap_file{
     uint32_t size;
+    uint32_t type;
     uint8_t *p_data;
 } PCAP_FILE;
 
@@ -39,9 +40,11 @@ void free_pcap_file( PCAP_FILE* pcap_file );
 PCAP_FILE_GLOBAL_HEADER* init_p__pcap_file_global_header( uint32_t magic_number, uint16_t version_major, uint16_t version_minor, 
                                                           int32_t  this_zone, uint32_t sig_figs, uint32_t snap_len, uint32_t network );
 
+uint32_t get_pcap_file_type( PCAP_FILE *p_pcap_file );
+
 FILE* create_pcap_file( char* pFile_name, PCAP_FILE_GLOBAL_HEADER* p_pcap_file_global_header );
 void close_pcap_file( FILE *p_file );
 void save_packet_to_pcap_file( FILE *p_file, PACKET *p, PCAP_FILE_GLOBAL_HEADER* p_pcap_file_global_header );
-PCAP_FILE* open_pcap_file( char* pFile_name );
+PCAP_FILE* open_pcap_file( char* pFile_name, uint32_t type );
 
 #endif

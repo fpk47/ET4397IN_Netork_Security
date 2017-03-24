@@ -7,8 +7,20 @@ static char text[100];
 
 static PCAP_FILE* p_current_pcap_file = NULL;
 static PCAP_FILE_GLOBAL_HEADER *p_current_pcap_file_global_header;
-static uint32_t current_index = 0;
+static uint32_t current_index = 1;
 
+static void parse_radio_tap_beacon( PACKET *p_packet, uint32_t current_index );
+static void parse_radio_tap_authentication( PACKET *p_packet, uint32_t current_index );
+static void parse_radio_tap_ACK( PACKET *p_packet, uint32_t current_index );
+static void parse_radio_tap_association_request( PACKET *p_packet, uint32_t current_index );
+static void parse_radio_tap_association_response( PACKET *p_packet, uint32_t current_index );
+static void parse_radio_tap_data( PACKET *p_packet, uint32_t current_index );
+static void parse_radio_tap_disassociation( PACKET *p_packet, uint32_t current_index );
+
+static void parse_radio_tap_packet( PACKET *p_packet );
+static void parse_ethernet_packet( PACKET *p_packet );
+
+static uint32_t parse_radio_tap_header( uint8_t *p_data, RADIO_TAP_HEADER *p_radio_tap_header, uint32_t current_index );
 static uint32_t parse_ethernet_header( uint8_t *p_data, ETHERNET_HEADER *p_ethernet_header, uint32_t current_index );
 static uint32_t parse_IP4_header( uint8_t *p_data, IP4_HEADER *p_IP4_header, uint32_t current_index );
 static uint32_t parse_ARP_header( uint8_t *p_data, ARP_HEADER *p_ARP_header, uint32_t current_index );
@@ -56,15 +68,125 @@ PACKET* get_next_pcap_file_packet( void ){
 	uint32_t size = p_pcap_file_entry_header->incl_len;
 
 	PACKET *p_packet = init_packet_uint8_t( size, &p_data[current_index] );
-	parse_packet( p_packet );
+	parse_packet( p_packet, get_pcap_file_type( p_current_pcap_file ) );
     current_index += size;
 
 	return p_packet;
 }
 
-void parse_packet( PACKET *p_packet ){
+void parse_packet( PACKET *p_packet, uint32_t type ){
+	if ( type == TYPE_ETHERNET ){
+		parse_ethernet_packet( p_packet );
+	} else if ( type == TYPE_RADIO_TAP ){
+		parse_radio_tap_packet( p_packet );
+	}
+}
+
+static void parse_radio_tap_packet( PACKET *p_packet ){
 	uint32_t temp_index = 0;
 	uint8_t *p_data = p_packet->p_data;
+	p_packet->type = TYPE_RADIO_TAP;
+
+	RADIO_TAP_HEADER *p_radio_tap_header = get_radio_tap_header( p_packet );
+
+	temp_index = parse_radio_tap_header( p_data, get_radio_tap_header( p_packet ), temp_index );
+
+	// Get Type, some byte shifts things needed..
+	memcpy( &(p_radio_tap_header->type), &p_data[ temp_index ], 1 );
+
+	uint8_t temp = (p_radio_tap_header->type)&0x0F;
+	temp >>= 2;
+
+	(p_radio_tap_header->type) &= 0xF0;
+	(p_radio_tap_header->type) |= temp;
+
+	memcpy( &temp, &p_data[ temp_index + 1], 1 );
+	temp_index += 4;
+
+	// to_DS, from_DS
+	p_radio_tap_header->to_DS = temp&0x80; 
+	p_radio_tap_header->from_DS = temp&0x40;
+
+	if ( p_radio_tap_header->to_DS ){
+		p_radio_tap_header->to_DS = 1;
+	}
+
+	if ( p_radio_tap_header->from_DS ){
+		p_radio_tap_header->from_DS = 1;
+	}
+
+	uint8_t type = get_radio_tap_type( p_packet );
+
+		 if ( type == TYPE_RADIO_TAP_BEACON )				{ parse_radio_tap_beacon( p_packet, temp_index ); }
+	else if ( type == TYPE_RADIO_TAP_AUTHENTICATION )		{ parse_radio_tap_authentication( p_packet, temp_index ); }
+	else if ( type == TYPE_RADIO_TAP_ACK )					{ parse_radio_tap_ACK( p_packet, temp_index ); }
+	else if ( type == TYPE_RADIO_TAP_ASSOCIATION_REQUEST )	{ parse_radio_tap_association_request( p_packet, temp_index ); }
+	else if ( type == TYPE_RADIO_TAP_ASSOCIATION_RESPONS )	{ parse_radio_tap_association_response( p_packet, temp_index ); }
+	else if ( type == TYPE_RADIO_TAP_DATA )					{ parse_radio_tap_data( p_packet, temp_index ); }
+	else if ( type == TYPE_RADIO_TAP_DISASSOCIATION )		{ parse_radio_tap_disassociation( p_packet, temp_index ); }
+}
+
+static void parse_radio_tap_fiels( PACKET *p_packet, uint32_t current_index ){
+	RADIO_TAP_HEADER *p_radio_tap_header = get_radio_tap_header( p_packet );
+
+	uint8_t to_DS = get_radio_tap_to_DS( p_packet );
+	uint8_t from_DS = get_radio_tap_from_DS( p_packet );
+	uint8_t *p_data = p_packet->p_data;
+
+	if ( to_DS == 0 && from_DS == 0 ){
+		memcpy( &(p_radio_tap_header->dst_address), &p_data[ current_index ], 6 );		current_index += 6;
+		memcpy( &(p_radio_tap_header->src_address), &p_data[ current_index ], 6 );		current_index += 6;
+		memcpy( &(p_radio_tap_header->BSSID), &p_data[ current_index ], 6 );			
+	} else if ( to_DS == 0 && from_DS == 1 ){
+		memcpy( &(p_radio_tap_header->dst_address), &p_data[ current_index ], 6 );		current_index += 6;
+		memcpy( &(p_radio_tap_header->BSSID), &p_data[ current_index ], 6 );			current_index += 6;
+		memcpy( &(p_radio_tap_header->src_address), &p_data[ current_index ], 6 );		
+	} else if ( to_DS == 1 && from_DS == 0 ){
+		memcpy( &(p_radio_tap_header->BSSID), &p_data[ current_index ], 6 );			current_index += 6;
+		memcpy( &(p_radio_tap_header->src_address), &p_data[ current_index ], 6 );		current_index += 6;
+		memcpy( &(p_radio_tap_header->dst_address), &p_data[ current_index ], 6 );		
+	} else if ( to_DS == 1 && from_DS == 1 ){
+		memcpy( &(p_radio_tap_header->receiving_station_address), &p_data[ current_index ], 6 );		current_index += 6;
+		memcpy( &(p_radio_tap_header->transmission_station_address), &p_data[ current_index ], 6 );		current_index += 6;
+		memcpy( &(p_radio_tap_header->dst_address), &p_data[ current_index ], 6 );						
+	}
+}
+
+static void parse_radio_tap_beacon( PACKET *p_packet, uint32_t current_index ){
+	parse_radio_tap_fiels( p_packet, current_index );
+}
+
+static void parse_radio_tap_authentication( PACKET *p_packet, uint32_t current_index ){
+	parse_radio_tap_fiels( p_packet, current_index );
+}
+
+static void parse_radio_tap_ACK( PACKET *p_packet, uint32_t current_index ){
+	RADIO_TAP_HEADER *p_radio_tap_header = get_radio_tap_header( p_packet );
+	uint8_t *p_data = p_packet->p_data;
+
+	memcpy( &(p_radio_tap_header->receiving_station_address), &p_data[ current_index ], 6 );	
+}
+
+static void parse_radio_tap_association_request( PACKET *p_packet, uint32_t current_index ){
+	parse_radio_tap_fiels( p_packet, current_index );
+}
+
+static void parse_radio_tap_association_response( PACKET *p_packet, uint32_t current_index ){
+	parse_radio_tap_fiels( p_packet, current_index );
+}
+
+static void parse_radio_tap_data( PACKET *p_packet, uint32_t current_index ){
+	parse_radio_tap_fiels( p_packet, current_index );
+}
+
+static void parse_radio_tap_disassociation( PACKET *p_packet, uint32_t current_index ){
+	parse_radio_tap_fiels( p_packet, current_index );
+}
+
+static void parse_ethernet_packet( PACKET *p_packet ){
+	uint32_t temp_index = 0;
+	uint8_t *p_data = p_packet->p_data;
+	p_packet->type = TYPE_ETHERNET;
 
 	temp_index = parse_ethernet_header( p_data, &(p_packet->ethernet_header), temp_index );
 
@@ -122,25 +244,36 @@ void parse_packet( PACKET *p_packet ){
 	}
 }
 
+static uint32_t parse_radio_tap_header( uint8_t *p_data, RADIO_TAP_HEADER *p_radio_tap_header, uint32_t current_index ){
+	memcpy( &(p_radio_tap_header->length), &p_data[ current_index + 2 ], 2 );
+
+	if ( p_radio_tap_header->length != 36 ){
+		memcpy( &(p_radio_tap_header->time), &p_data[ current_index + 8 ], 8 );
+	} else{ 
+		memcpy( &(p_radio_tap_header->time), &p_data[ current_index + 16 ], 8 );
+	}
+
+	return current_index + get_radio_tap_header_size( p_radio_tap_header );
+}
 
 static uint32_t parse_ethernet_header( uint8_t *p_data, ETHERNET_HEADER *p_ethernet_header, uint32_t current_index ){
-	memcpy( p_ethernet_header->MAC_dst, &p_data[  current_index + 0 ], 6 );
-	memcpy( p_ethernet_header->MAC_src, &p_data[  current_index + 6 ], 6 );
-	memcpy( &(p_ethernet_header->type), &p_data[  current_index + 12 ], 2 );
+	memcpy( p_ethernet_header->MAC_dst, &p_data[ current_index + 0 ], 6 );
+	memcpy( p_ethernet_header->MAC_src, &p_data[ current_index + 6 ], 6 );
+	memcpy( &(p_ethernet_header->type), &p_data[ current_index + 12 ], 2 );
 	swap_variable( (uint8_t *) &(p_ethernet_header->type), 2 );
 
 	return current_index + get_ethernet_header_size();
 }
 
 static uint32_t parse_ARP_header( uint8_t *p_data, ARP_HEADER *p_ARP_header, uint32_t current_index ){
-	memcpy( &(p_ARP_header->hardware_type), &p_data[  current_index + 0 ], 2 );
+	memcpy( &(p_ARP_header->hardware_type), &p_data[ current_index + 0 ], 2 );
 	swap_variable( (uint8_t *) &(p_ARP_header->hardware_type), 2 );
 
-	memcpy( &(p_ARP_header->protocol_type), &p_data[  current_index + 2 ], 2 );
+	memcpy( &(p_ARP_header->protocol_type), &p_data[ current_index + 2 ], 2 );
 	swap_variable( (uint8_t *) &(p_ARP_header->protocol_type), 2 );
 
-	memcpy( &(p_ARP_header->hardware_size), &p_data[  current_index + 4 ], 1 );
-	memcpy( &(p_ARP_header->protocol_size), &p_data[  current_index + 5 ], 1 );
+	memcpy( &(p_ARP_header->hardware_size), &p_data[ current_index + 4 ], 1 );
+	memcpy( &(p_ARP_header->protocol_size), &p_data[ current_index + 5 ], 1 );
 
 	if ( p_ARP_header->hardware_size != 6 ){
 		print_info( "packet.c: parse_ARP_header() --> hardware_size != 6\n" );
@@ -155,10 +288,10 @@ static uint32_t parse_ARP_header( uint8_t *p_data, ARP_HEADER *p_ARP_header, uin
 	memcpy( &(p_ARP_header->opcode), &p_data[  current_index + 6 ], 2 );
 	swap_variable( (uint8_t *) &(p_ARP_header->opcode), 2 );
 
-	memcpy( p_ARP_header->MAC_src, &p_data[  current_index +  8 ], 6 );
-	memcpy( p_ARP_header->IP4_src, &p_data[  current_index + 14 ], 4 );
-	memcpy( p_ARP_header->MAC_dst, &p_data[  current_index + 18 ], 6 );
-	memcpy( p_ARP_header->IP4_dst, &p_data[  current_index + 24 ], 4 );
+	memcpy( p_ARP_header->MAC_src, &p_data[ current_index +  8 ], 6 );
+	memcpy( p_ARP_header->IP4_src, &p_data[ current_index + 14 ], 4 );
+	memcpy( p_ARP_header->MAC_dst, &p_data[ current_index + 18 ], 6 );
+	memcpy( p_ARP_header->IP4_dst, &p_data[ current_index + 24 ], 4 );
 
 	return current_index + get_ARP_header_size();
 }

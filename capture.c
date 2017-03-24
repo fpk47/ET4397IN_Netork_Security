@@ -3,6 +3,7 @@
 static char text[100];
 
 static uint8_t IP4[4];
+static uint8_t MAC[4];
 
 static void set_own_IP4( char* name ){
     int fd;
@@ -25,6 +26,22 @@ static void set_own_IP4( char* name ){
     sprintf( text, "capture.c: set_own_IP4_address() --> IP address: %d.%d.%d.%d\n", IP4[0], IP4[1], IP4[2], IP4[3] );
     print_info( text );
 }
+
+void set_own_MAC( uint8_t *p_MAC )
+{
+    // TODO: Make automatic.. Got errors trying to use struct ifreq ifr....
+
+    for ( int i = 0; i < 6; i++ ){
+        MAC[i] = p_MAC[i];
+    }
+
+    sprintf( text, "capture.c: set_own_MAC_address() --> MAC address: %s\n", get_MAC_address_name( p_MAC ) );
+    print_info( text );
+}
+
+uint8_t* get_own_MAC( void ){
+    return MAC;
+} 
 
 uint8_t* get_own_IP4( void ){
     return IP4;
@@ -85,7 +102,7 @@ PACKET* get_next_device_packet( DEVICE* p_device ){
 	}
     
     PACKET *p_packet = init_packet_u_char( packet_header.len, data );
-    parse_packet( p_packet );
+    parse_packet( p_packet, TYPE_ETHERNET );
 
     return p_packet;
 }

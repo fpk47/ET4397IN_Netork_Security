@@ -5,7 +5,7 @@
 #include "pcap_file.h"
 #include "capture.h"
 
-void parse_packet( PACKET *p_packet);
+void parse_packet( PACKET *p_packet, uint32_t type );
 
 void set_current_pcap_file( PCAP_FILE* p_pcap_file );
 PACKET* get_next_pcap_file_packet( void );

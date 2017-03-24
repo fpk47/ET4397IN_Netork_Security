@@ -25,6 +25,15 @@ void free_pcap_file( PCAP_FILE* p_pcap_file ){
 	free( p_pcap_file );
 }
 
+uint32_t get_pcap_file_type( PCAP_FILE *p_pcap_file ){
+    if ( p_pcap_file == NULL ){
+        print_warning( "pcap_file.c: get_pcap_file_type() --> p_pcap_file == NULL\n" );
+        return -1;
+    }
+
+    return p_pcap_file->type;
+}
+
 PCAP_FILE_GLOBAL_HEADER* init_p__pcap_file_global_header( uint32_t magic_number, uint16_t version_major, uint16_t version_minor, 
                                                           int32_t  this_zone, uint32_t sig_figs, uint32_t snap_len, uint32_t network ){
 	PCAP_FILE_GLOBAL_HEADER *p_pcap_file_global_header = (PCAP_FILE_GLOBAL_HEADER*) malloc( sizeof( PCAP_FILE_GLOBAL_HEADER ) );
@@ -100,7 +109,7 @@ void save_packet_to_pcap_file( FILE *p_file, PACKET *p_packet, PCAP_FILE_GLOBAL_
     return;
 }
 
-PCAP_FILE* open_pcap_file( char* p_file_name ){
+PCAP_FILE* open_pcap_file( char* p_file_name, uint32_t type ){
 	char* p_address = text;
 	sprintf( p_address, "./data/%s", p_file_name );
     FILE* p_file = fopen( p_address, "r+" );
@@ -119,6 +128,13 @@ PCAP_FILE* open_pcap_file( char* p_file_name ){
     	if ( file_size != 0 ){
     		PCAP_FILE* p_pcap_file = init_pcap_file_struct( file_size );
     		uint32_t bytes_read = fread( p_pcap_file->p_data, sizeof(uint8_t), file_size, p_file );
+
+            if ( type != TYPE_ETHERNET && type != TYPE_RADIO_TAP ){
+                print_error( "pcap_file.c: open_pcap_file() --> type != TYPE_ETHERNET && type != TYPE_RADIO_TAP\n" );
+                exit(0);
+            }
+
+            p_pcap_file->type = type;
 
     		 if ( bytes_read != file_size ){
     		 	printf( "[ERROR] pcap_file.c: open_pcap_file() --> file_size != bytes_read\n" );

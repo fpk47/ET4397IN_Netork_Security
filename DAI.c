@@ -88,10 +88,12 @@ static uint32_t check_IP4_pair( uint8_t *p_IP4_1, uint8_t *p_IP4_2 ){
 void init_DAI( void ){
 	uint8_t ARP_notice = UNSUBSCRIBED;
 	uint8_t ARP_error = UNSUBSCRIBED;
+	uint8_t WIFI_radio_tap_notice = UNSUBSCRIBED;
+	uint8_t WIFI_ARP_notice = UNSUBSCRIBED;
 
-	p_local_message_bus = create_message_bus_subscription( ARP_notice, ARP_error );
+	p_local_message_bus = create_message_bus_subscription( ARP_notice, ARP_error, WIFI_radio_tap_notice, WIFI_ARP_notice );
 
-	p_packet_list = malloc_packet_list();
+	p_packet_list = malloc_packet_list( TYPE_ETHERNET );
 	p_local_configuration = malloc_configuration();
 
 	init_IP4_pair_counter();

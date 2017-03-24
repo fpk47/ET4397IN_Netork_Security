@@ -5,6 +5,52 @@ static uint8_t memory_length[1000];
 static char text[200];
 static uint8_t checkByte( uint8_t bit );
 
+void printBytes( uint32_t size, uint8_t *data ){
+	for ( int32_t i = size - 1; i >= 0; i-- ){
+		printf( "%02x ", data[i] );
+	}
+	printf("\n");
+}
+
+void printBits( uint32_t size, uint8_t *data ){
+	for ( int32_t i = size - 1; i >= 0; i-- ){
+		for ( int32_t j = 7; j >= 0; j-- ){
+			if ( checkBit(j, &data[i] ) ){
+				printf( "1" );
+			} else{
+				printf( "0" );
+			}
+		}
+
+		printf( " " );
+	}
+
+	printf("\n");
+}
+
+uint8_t checkBit( uint16_t bitNumber, uint8_t *data ){
+	uint8_t index = 0;
+
+	while ( bitNumber > 7 ){
+		bitNumber -= 8;
+		index++;
+	}
+
+	switch (bitNumber){
+		case 0 : if ( ( data[index]&0x01 ) != 0 ) return TRUE;	break;
+		case 1 : if ( ( data[index]&0x02 ) != 0 ) return TRUE;	break;
+		case 2 : if ( ( data[index]&0x04 ) != 0 ) return TRUE;	break;
+		case 3 : if ( ( data[index]&0x08 ) != 0 ) return TRUE;	break;
+		case 4 : if ( ( data[index]&0x10 ) != 0 ) return TRUE;	break;
+		case 5 : if ( ( data[index]&0x20 ) != 0 ) return TRUE;	break;
+		case 6 : if ( ( data[index]&0x40 ) != 0 ) return TRUE;	break;
+		case 7 : if ( ( data[index]&0x80 ) != 0 ) return TRUE;	break;
+		default : return FALSE;
+	}
+
+	return FALSE;
+}
+
 static uint32_t domain_replace( uint8_t* p_text, uint32_t *p_length ){
 	for ( int i = 0; i < *p_length; i++ ){
 		if ( p_text[i] == 0xc0 ){
@@ -26,6 +72,22 @@ static uint32_t domain_replace( uint8_t* p_text, uint32_t *p_length ){
 	}
 
 	return FALSE;
+}
+
+static uint32_t check_bit( uint8_t *p_byte, uint8_t bit ){
+	return ( *p_byte & (1 << bit) );
+}
+
+void swap_byte( uint8_t *p_byte ){
+	uint8_t temp = 0;
+
+	for ( int i = 0; i < 8; i++ ){
+		if ( check_bit( p_byte, 7-i ) ){
+			temp |= (0x01 << i);
+		}
+	}
+
+	*p_byte = temp;
 }
 
 void swap_variable( uint8_t *p_data, uint32_t size ){
@@ -58,6 +120,14 @@ uint32_t get_uint32_t( uint8_t *p_data ){
 	return temp;
 }
 
+uint64_t get_uint64_t( uint8_t *p_data ){
+	uint64_t temp;
+	memcpy( &(temp), p_data, 8 );
+
+	swap_variable( (uint8_t*) &temp, 8 );
+	return temp;
+}
+
 void set_uint16_t( uint8_t *p_data, uint16_t data ){
 	memcpy( p_data, (void*) &data, 2 );
 	swap_variable( p_data, 2 );
@@ -66,6 +136,11 @@ void set_uint16_t( uint8_t *p_data, uint16_t data ){
 void set_uint32_t( uint8_t *p_data, uint32_t data ){
 	memcpy( p_data, (void*) &data, 4 );
 	swap_variable( p_data, 4 );
+}
+
+void set_uint64_t( uint8_t *p_data, uint64_t data ){
+	memcpy( p_data, (void*) &data, 8 );
+	swap_variable( p_data, 8 );
 }
 
 void set_domain_name( char *p_name, uint32_t index, uint32_t length ){
@@ -131,6 +206,40 @@ char* get_MAC_address_name( uint8_t *p_data ){
     	return local_text_2;
 	}
 }
+
+void set_IP4_address( uint8_t *p_data, uint8_t *p_IP4_address ){
+	if ( p_data == NULL ){
+		print_warning( "tools.c: set_IP4_address() --> p_data == NULL\n" );
+		return;
+	}
+
+	if ( p_IP4_address == NULL ){
+		print_warning( "tools.c: set_IP4_address() --> p_IP4_address == NULL\n" );
+		return;
+	}
+
+	for ( int i = 0; i < 4; i++ ){
+		p_data[i] = p_IP4_address[i];
+	}
+}
+
+
+void set_MAC_address( uint8_t *p_data, uint8_t *p_MAC_address ){
+	if ( p_data == NULL ){
+		print_warning( "tools.c: set_MAC_address() --> p_data == NULL\n" );
+		return;
+	}
+
+	if ( p_MAC_address == NULL ){
+		print_warning( "tools.c: set_MAC_address() --> p_MAC_address == NULL\n" );
+		return;
+	}
+
+	for ( int i = 0; i < 6; i++ ){
+		p_data[i] = p_MAC_address[i];
+	}
+}
+
 
 char* get_IP4_address_name( uint8_t *p_data ){
 	static char local_text_1[100];
